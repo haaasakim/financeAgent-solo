@@ -25,6 +25,9 @@ public interface InstrumentMapper {
     /** 全部在册标的（不含退市），按 instrument_id 升序。 */
     List<Instrument> findAllListed();
 
+    /** 当前没有任何日K的标的（不含退市），按 instrument_id 升序。用于失败后的断点续传。 */
+    List<Instrument> findWithoutDailyBars();
+
     List<Instrument> findByType(@Param("instrumentType") String instrumentType);
 
     long count();

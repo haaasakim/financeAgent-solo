@@ -42,7 +42,7 @@ java -jar target/financeAgent-*.jar --sync.instruments --sync.init=0 --sync.snap
 java -jar target/financeAgent-*.jar --sync.incremental --sync.snapshot --spring.main.web-application-type=none
 ```
 
-M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`。
+M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，用 `--sync.missing` 只补拉没有日K的标的（可重复执行直到缺失为 0）。
 
 ## 项目结构
 

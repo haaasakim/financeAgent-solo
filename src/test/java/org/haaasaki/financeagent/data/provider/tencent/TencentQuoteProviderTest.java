@@ -4,12 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.given;
 
 import java.time.LocalDate;
 import java.util.List;
 
 import org.haaasaki.financeagent.common.exception.DataIntegrityException;
+import org.haaasaki.financeagent.common.exception.DataSyncException;
+import org.haaasaki.financeagent.config.QuoteProperties;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.provider.support.ThrottledHttpClient;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +41,9 @@ class TencentQuoteProviderTest {
             ]}}}
             """;
 
+    private static final String PRIMARY = "https://web.ifzq.gtimg.cn";
+    private static final String FALLBACK = "https://ifzq.gtimg.cn";
+
     @Mock
     private ThrottledHttpClient httpClient;
 
@@ -45,7 +51,8 @@ class TencentQuoteProviderTest {
 
     @BeforeEach
     void setUp() {
-        provider = new TencentQuoteProvider(httpClient, new ObjectMapper(), 3);
+        provider = new TencentQuoteProvider(httpClient, new ObjectMapper(), 3,
+                new QuoteProperties(List.of(PRIMARY, FALLBACK)));
     }
 
     @Test
@@ -145,6 +152,19 @@ class TencentQuoteProviderTest {
                 "600000.SH", LocalDate.of(2024, 9, 1), LocalDate.of(2024, 9, 30)))
                 .isInstanceOf(DataIntegrityException.class)
                 .hasMessageContaining("区间外");
+    }
+
+    @Test
+    @DisplayName("主域名不可用时回退到备用域名")
+    void fallsBackToNextHost() {
+        given(httpClient.get(startsWith(PRIMARY), any()))
+                .willThrow(new DataSyncException("HTTP 501 - WAF"));
+        given(httpClient.get(startsWith(FALLBACK), any())).willReturn(SAMPLE);
+
+        List<DailyBar> bars = provider.fetchDailyBars(
+                "600000.SH", LocalDate.of(2024, 9, 1), LocalDate.of(2024, 9, 30));
+
+        assertThat(bars).hasSize(2);
     }
 
     @Test

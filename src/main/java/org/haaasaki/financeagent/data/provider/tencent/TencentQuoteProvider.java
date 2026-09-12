@@ -11,6 +11,7 @@ import java.util.Map;
 
 import org.haaasaki.financeagent.common.exception.DataIntegrityException;
 import org.haaasaki.financeagent.common.exception.DataSyncException;
+import org.haaasaki.financeagent.config.QuoteProperties;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.provider.QuoteProvider;
 import org.haaasaki.financeagent.data.provider.support.ThrottledHttpClient;
@@ -27,9 +28,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * 腾讯日K数据源。
  *
  * <pre>
- * GET https://ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,{start},{end},{count},qfq
+ * GET {host}/appstock/app/fqkline/get?param={symbol},day,{start},{end},{count},qfq
  * 返回 data.{symbol}.qfqday = [[日期, 开, 收, 高, 低, 成交量(手)], ...]
  * </pre>
+ *
+ * <p>域名按 {@code finance.providers.quote.tencent-kline-hosts} 配置顺序回退：
+ * 实测 {@code ifzq.gtimg.cn} 前置腾讯 WAF，对 Java/Python 客户端持续返回 501，
+ * 而 {@code web.ifzq.gtimg.cn} 正常，因此默认 web 域优先。
  *
  * <p>三个必须注意的坑（详见 docs/DATA_SOURCES.md 第 2 节）：
  * <ol>
@@ -44,7 +49,7 @@ public class TencentQuoteProvider implements QuoteProvider {
 
     private static final Logger log = LoggerFactory.getLogger(TencentQuoteProvider.class);
 
-    private static final String KLINE_URL = "https://ifzq.gtimg.cn/appstock/app/fqkline/get";
+    private static final String KLINE_PATH = "/appstock/app/fqkline/get";
 
     /** 实测单次请求上限。 */
     private static final int MAX_BARS_PER_REQUEST = 800;
@@ -56,14 +61,17 @@ public class TencentQuoteProvider implements QuoteProvider {
     private final ThrottledHttpClient httpClient;
     private final ObjectMapper objectMapper;
     private final int segmentYears;
+    private final QuoteProperties quoteProperties;
 
     public TencentQuoteProvider(
             ThrottledHttpClient httpClient,
             ObjectMapper objectMapper,
-            @Value("${finance.sync.segment-years:3}") int segmentYears) {
+            @Value("${finance.sync.segment-years:3}") int segmentYears,
+            QuoteProperties quoteProperties) {
         this.httpClient = httpClient;
         this.objectMapper = objectMapper;
         this.segmentYears = Math.max(1, segmentYears);
+        this.quoteProperties = quoteProperties;
     }
 
     @Override
@@ -98,10 +106,19 @@ public class TencentQuoteProvider implements QuoteProvider {
     }
 
     private List<DailyBar> fetchSegment(String instrumentId, String symbol, LocalDate start, LocalDate end) {
-        String url = KLINE_URL + "?param=" + symbol + ",day," + start + "," + end
-                + "," + MAX_BARS_PER_REQUEST + ",qfq";
-        String body = httpClient.get(url, StandardCharsets.UTF_8);
-        return parse(instrumentId, symbol, start, end, body);
+        DataSyncException lastError = null;
+        for (String host : quoteProperties.tencentKlineHosts()) {
+            String url = host + KLINE_PATH + "?param=" + symbol + ",day," + start + "," + end
+                    + "," + MAX_BARS_PER_REQUEST + ",qfq";
+            try {
+                String body = httpClient.get(url, StandardCharsets.UTF_8);
+                return parse(instrumentId, symbol, start, end, body);
+            } catch (DataSyncException e) {
+                lastError = e;
+                log.warn("腾讯日K源不可用（{}），尝试下一源：{}", host, e.getMessage());
+            }
+        }
+        throw lastError != null ? lastError : new DataSyncException("无可用腾讯日K源");
     }
 
     private List<DailyBar> parse(String instrumentId, String symbol,

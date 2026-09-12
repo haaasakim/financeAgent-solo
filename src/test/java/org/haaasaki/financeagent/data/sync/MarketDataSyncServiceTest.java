@@ -6,8 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -211,6 +213,37 @@ class MarketDataSyncServiceTest {
 
         syncService.syncIndexes();
         assertThat(dailyBarMapper.countByInstrument("000001.SH")).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("补拉缺失标的：只处理没有任何日K的标的，已有日K的跳过")
+    void syncsOnlyMissingInstruments() {
+        instrumentMapper.upsertBatch(List.of(new Instrument(
+                "000001.SZ", Instrument.TYPE_STOCK, "SZ", "000001", "平安银行",
+                "MAIN", "CNY", "Asia/Shanghai", null, null, Instrument.STATUS_LISTED)));
+        dailyBarMapper.upsertBatch(List.of(barFor("000001.SZ", LocalDate.of(2024, 9, 2), 11.0)));
+        given(quoteProvider.fetchDailyBars(eq(ID), any(), any()))
+                .willReturn(List.of(barFor(ID, LocalDate.of(2024, 9, 2), 9.0)));
+
+        SyncResult result = syncService.syncMissingDailyBars();
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(result.success()).isEqualTo(1);
+        assertThat(dailyBarMapper.countByInstrument(ID)).isEqualTo(1L);
+        verify(quoteProvider, never()).fetchDailyBars(eq("000001.SZ"), any(), any());
+    }
+
+    @Test
+    @DisplayName("补拉缺失标的：无缺失时直接返回，不发起请求")
+    void missingSyncIsNoopWhenNothingMissing() {
+        dailyBarMapper.upsertBatch(List.of(barFor(ID, LocalDate.of(2024, 9, 2), 9.0)));
+
+        SyncResult result = syncService.syncMissingDailyBars();
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.total()).isZero();
+        verifyNoInteractions(quoteProvider);
     }
 
     private InstrumentSnapshot snapshot(String symbol, String code, String name,

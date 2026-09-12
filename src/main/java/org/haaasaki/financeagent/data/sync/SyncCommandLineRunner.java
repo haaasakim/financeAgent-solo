@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.init=50 --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.init=0 --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.incremental --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.missing --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.snapshot --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.indexes --spring.main.web-application-type=none"
  * </pre>
@@ -54,6 +55,10 @@ public class SyncCommandLineRunner implements ApplicationRunner {
         if (args.containsOption("sync.incremental")) {
             log.info("命令行触发：增量同步日K");
             report(syncService.syncDailyIncremental());
+        }
+        if (args.containsOption("sync.missing")) {
+            log.info("命令行触发：补拉缺失标的的日K");
+            report(syncService.syncMissingDailyBars());
         }
         if (args.containsOption("sync.snapshot")) {
             log.info("命令行触发：同步市场快照");

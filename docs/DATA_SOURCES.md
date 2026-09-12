@@ -65,11 +65,14 @@ param=sh600000,day,2005-01-01,2005-12-31,640,qfq   → 239 条，可回溯至 20
 
 **陷阱三：域名不是唯一的**
 
-| 域名 | 结果 |
+| 域名 | 实测结果（2026-09-13） |
 |---|---|
-| `ifzq.gtimg.cn` | **可用**，统一用这个 |
-| `web.ifzq.gtimg.cn` | 分钟线路径 301 跳转至 `web3`；日K 路径此前可用但已不稳定 |
-| `web3.ifzq.gtimg.cn` | 本机不可达 |
+| `ifzq.gtimg.cn` | **前置腾讯 WAF**：curl 正常，但 Java HttpClient / Python urllib 持续返回 501（响应体跳转 `waf.tencent.com/501page`），更换 UA / Accept 头无效。批量抓取会整批失败 |
+| `web.ifzq.gtimg.cn` | **可用**（TAPISIX 网关，返回结构与主域一致），设为默认主源 |
+| `web3.ifzq.gtimg.cn` | 本机不可达，不用 |
+
+日K域名按 `finance.providers.quote.tencent-kline-hosts` 配置顺序回退，默认 web 域优先；
+主源抛 `DataSyncException` 时自动切换下一源，数据校验类错误不触发切换。
 
 ## 3. 腾讯分钟K（一期不使用）
 

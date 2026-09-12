@@ -34,8 +34,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
     private static final String HEAVY = "============================================================";
     private static final String THIN = "------------------------------------------------------------";
     private static final String SYNC_HINT =
-            " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.incremental\n"
-                    + "              --sync.snapshot（市场快照）| --sync.indexes（指数）";
+            " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.missing（补缺失）\n"
+                    + "              --sync.incremental | --sync.snapshot（快照）| --sync.indexes（指数）";
 
     private final DataStatisticsService statisticsService;
     private final ApplicationContext applicationContext;

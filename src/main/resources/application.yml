@@ -35,8 +35,16 @@ finance:
       max-retry: 3
       # 实测腾讯 3.3 QPS 连发 30 次零失败，默认留出余量取 5 QPS
       rate-limit-qps: 5
+      # 连续失败达到阈值暂停冷却：实测腾讯持续批量抓取时返回 HTTP 501，冷却后恢复
+      circuit-breaker-threshold: 5
+      cooldown-seconds: 60
     quote:
       order: [tencent]
+      # 日K域名按序回退。实测 ifzq.gtimg.cn 前置腾讯 WAF，
+      # 对 Java/Python 客户端持续返回 501（curl 正常），故 web 域优先
+      tencent-kline-hosts:
+        - https://web.ifzq.gtimg.cn
+        - https://ifzq.gtimg.cn
     snapshot:
       order: [sina]
 

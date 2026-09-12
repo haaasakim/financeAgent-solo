@@ -124,13 +124,30 @@ public class MarketDataSyncService {
      * @param limit 最多处理的标的数量，&lt;= 0 表示不限制。用于小样本验证。
      */
     public SyncResult initializeDailyBars(int limit) {
-        LocalDateTime startedAt = LocalDateTime.now();
-        String taskName = "INIT_DAILY_BARS";
         List<Instrument> targets = instrumentMapper.findAllListed();
         if (limit > 0 && targets.size() > limit) {
             targets = targets.subList(0, limit);
         }
+        return syncDailyBars(targets, "INIT_DAILY_BARS");
+    }
 
+    /**
+     * 只补拉当前没有任何日K的标的，用于全量初始化中断或批量失败后的断点续传。
+     *
+     * <p>为什么可以按「零行」判定失败：Provider 先取完全部日期分段再返回，
+     * 任一分段失败都会让整只标的抛错且不写入，因此失败标的在 daily_bar 中没有任何行。
+     */
+    public SyncResult syncMissingDailyBars() {
+        List<Instrument> targets = instrumentMapper.findWithoutDailyBars();
+        if (targets.isEmpty()) {
+            log.info("补拉缺失日K：没有缺失标的");
+            return new SyncResult("SYNC_MISSING_BARS", "SUCCESS", 0, 0, 0, "无缺失标的");
+        }
+        return syncDailyBars(targets, "SYNC_MISSING_BARS");
+    }
+
+    private SyncResult syncDailyBars(List<Instrument> targets, String taskName) {
+        LocalDateTime startedAt = LocalDateTime.now();
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusYears(historyYears);
 
@@ -164,14 +181,15 @@ public class MarketDataSyncService {
                 log.warn("同步失败 {} - {}", instrument.instrumentId(), e.getMessage());
             }
             if (processed % PROGRESS_INTERVAL == 0) {
-                log.info("日K初始化进度 {}/{}（成功 {}，失败 {}）", processed, targets.size(), success, fail);
+                log.info("日K同步进度[{}] {}/{}（成功 {}，失败 {}）",
+                        taskName, processed, targets.size(), success, fail);
             }
         }
 
         String status = fail == 0 ? "SUCCESS" : (success == 0 ? "FAILED" : "PARTIAL");
         String message = summarize(errors);
         recordSyncLog(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
-        log.info("日K初始化完成：总计 {}，成功 {}，失败 {}", targets.size(), success, fail);
+        log.info("日K同步完成[{}]：总计 {}，成功 {}，失败 {}", taskName, targets.size(), success, fail);
         return new SyncResult(taskName, status, targets.size(), success, fail, message);
     }
 
