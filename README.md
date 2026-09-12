@@ -31,7 +31,18 @@ java -jar target/financeAgent-*.jar
 open http://localhost:8080
 ```
 
-首次运行需要初始化数据：启动后进入「数据同步」页触发一次**全市场历史初始化**（约 2.6 万次请求，耗时约 1.5 小时，建议夜间执行）。之后每天收盘后自动增量同步。
+首次运行需要初始化数据（命令行触发，执行完自动退出）：
+
+```bash
+# 标的字典 → 10 年日K → 市场快照 → 指数（约 2.6 万次请求，耗时约 1.5 小时，建议夜间执行）
+java -jar target/financeAgent-*.jar --sync.instruments --sync.init=0 --sync.snapshot --sync.indexes \
+     --spring.main.web-application-type=none
+
+# 之后每天收盘后增量更新
+java -jar target/financeAgent-*.jar --sync.incremental --sync.snapshot --spring.main.web-application-type=none
+```
+
+M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`。
 
 ## 项目结构
 

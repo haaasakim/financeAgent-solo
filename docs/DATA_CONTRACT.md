@@ -19,6 +19,7 @@ erDiagram
     instrument ||--o{ daily_bar : "1:N"
     instrument ||--o{ factor_daily : "1:N"
     instrument ||--o{ event : "1:N"
+    instrument ||--o| market_snapshot : "1:1 最新"
     strategy ||--o{ backtest_task : "1:N"
     backtest_task ||--o{ backtest_daily : "1:N"
     backtest_task ||--o{ backtest_trade : "1:N"
@@ -46,6 +47,20 @@ erDiagram
         real amount
         real pct_chg
         real turnover_rate
+        text source
+        text fetched_at
+    }
+    market_snapshot {
+        text instrument_id PK
+        real last_price
+        real pct_chg
+        integer volume
+        real amount
+        real turnover_rate
+        real pe_ttm
+        real pb
+        real total_mv
+        real circ_mv
         text source
         text fetched_at
     }
