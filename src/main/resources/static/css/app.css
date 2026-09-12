@@ -39,11 +39,12 @@ header {
 }
 
 .nav { display: flex; align-items: center; gap: 36px; height: 56px; }
-.logo { font-size: 15px; font-weight: 500; }
+.logo { font-size: 15px; font-weight: 500; text-decoration: none; color: var(--text); }
 .logo em { font-style: normal; color: var(--primary); }
 
 .tabs { display: flex; gap: 4px; }
-.tab { padding: 6px 15px; border-radius: 6px; color: var(--text-2); font-size: 13px; }
+.tab { padding: 6px 15px; border-radius: 6px; color: var(--text-2); font-size: 13px; text-decoration: none; }
+.tab:not(.disabled):not(.active):hover { background: #F0F0EC; }
 .tab.active { background: var(--primary); color: #fff; }
 .tab.disabled { color: var(--text-3); cursor: not-allowed; }
 
@@ -98,8 +99,104 @@ code {
 .hint { font-size: 12px; color: var(--text-2); line-height: 2; }
 .section-gap { margin-top: 16px; }
 
+/* ---------- 市场模块 ---------- */
+
+.toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+input[type=text], input[type=number], select {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--card);
+  color: var(--text);
+  outline: none;
+}
+input[type=text]:focus, select:focus { border-color: var(--primary); }
+input[type=text] { width: 200px; }
+
+.btn {
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text);
+  transition: .15s;
+}
+.btn:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: .55; cursor: default; }
+.btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn-primary:hover:not(:disabled) { background: #134E88; color: #fff; }
+.btn-sm { padding: 3px 10px; font-size: 12px; }
+.btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+.table-scroll { overflow-x: auto; }
+th a { color: inherit; text-decoration: none; cursor: pointer; }
+th.sorted a { color: var(--primary); }
+th .arrow { color: var(--text-3); font-size: 10px; }
+.code { font-family: ui-monospace, Menlo, monospace; color: var(--text-2); font-size: 12px; }
+.name { color: var(--primary); text-decoration: none; }
+.name:hover { text-decoration: underline; }
+
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  color: var(--text-2);
+  font-size: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pager-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.idx { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.idx-item { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.idx-name { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.idx-val { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.idx-chg { font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+.quote-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px 16px; }
+.quote-label { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
+.quote-val { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+
+.kline-chart { width: 100%; height: 420px; }
+.range-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.back { color: var(--text-3); text-decoration: none; margin-right: 6px; }
+.back:hover { color: var(--primary); }
+
+.htmx-indicator { opacity: 0; transition: opacity .15s; }
+.htmx-request .htmx-indicator, .htmx-request.htmx-indicator { opacity: 1; }
+
+.notice {
+  background: #FDF3F3;
+  border: 1px solid #F5C4C4;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #A32D2D;
+  font-size: 12px;
+}
+.fragment-error { padding: 8px 0; }
+
+@media (max-width: 1100px) {
+  .idx { grid-template-columns: repeat(2, 1fr); }
+  .quote-grid { grid-template-columns: repeat(4, 1fr); }
+}
+
 @media (max-width: 900px) {
   .metrics { grid-template-columns: repeat(2, 1fr); }
   .wrap { padding: 0 14px; }
   .nav { gap: 14px; }
+  .quote-grid { grid-template-columns: repeat(3, 1fr); }
+  .kline-chart { height: 340px; }
+}
+
+@media (max-width: 768px) {
+  input[type=text] { width: 100%; }
+  .idx { gap: 8px; }
+  .quote-grid { grid-template-columns: repeat(2, 1fr); }
+  .kline-chart { height: 300px; }
 }

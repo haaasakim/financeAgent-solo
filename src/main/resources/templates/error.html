@@ -1,21 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>financeAgent · 出错了</title>
-    <link rel="stylesheet" th:href="@{/css/app.css?v=1}">
-</head>
+<head th:replace="~{layout/skeleton :: head('出错了')}"></head>
 <body>
 
-<header>
-    <div class="wrap nav">
-        <div class="logo">finance<em>Agent</em></div>
-        <div class="tabs">
-            <span class="tab active">总览</span>
-        </div>
-    </div>
-</header>
+<header th:replace="~{layout/skeleton :: nav('')}"></header>
 
 <main class="wrap">
     <div class="card">

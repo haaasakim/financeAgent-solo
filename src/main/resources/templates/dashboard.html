@@ -1,24 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>financeAgent · 数据总览</title>
-    <link rel="stylesheet" th:href="@{/css/app.css?v=1}">
-</head>
+<head th:replace="~{layout/skeleton :: head('数据总览')}"></head>
 <body>
 
-<header>
-    <div class="wrap nav">
-        <div class="logo">finance<em>Agent</em></div>
-        <div class="tabs">
-            <span class="tab active">总览</span>
-            <span class="tab disabled" title="M2 开发中">市场</span>
-            <span class="tab disabled" title="M3 开发中">选股</span>
-            <span class="tab disabled" title="M4 开发中">回测</span>
-        </div>
-    </div>
-</header>
+<header th:replace="~{layout/skeleton :: nav('dashboard')}"></header>
 
 <main class="wrap">
 
@@ -64,7 +49,8 @@
         <div class="hint">
             1. 同步标的字典（股票 + ETF 全市场）：<code>--sync.instruments</code><br>
             2. 初始化 10 年日K：<code>--sync.init=0</code>（约 3 小时，建议挂着跑）<br>
-            3. 之后每日增量更新：<code>--sync.incremental</code>
+            3. 同步市场快照：<code>--sync.snapshot</code> · 同步指数：<code>--sync.indexes</code><br>
+            4. 之后每日增量更新：<code>--sync.incremental</code>
         </div>
     </div>
 
@@ -112,14 +98,16 @@
     <div class="card section-gap">
         <div class="card-hd">
             <div class="card-title">下一步</div>
-            <div class="card-sub">当前进度：M1 数据层已完成</div>
+            <div class="card-sub">当前进度：M2 市场模块（快照 / 列表 / 个股详情）</div>
         </div>
         <div class="hint">
-            同步通过命令行触发（异步任务框架将在 M2 提供，届时可在页面上直接发起并观察进度）：<br>
+            同步通过命令行触发（异步任务框架将随后续版本提供，届时可在页面上直接发起并观察进度）：<br>
             <code>--sync.instruments</code> 同步标的字典 ·
             <code>--sync.init=N</code> 初始化日K（N=0 为全量）·
+            <code>--sync.snapshot</code> 同步市场快照 ·
+            <code>--sync.indexes</code> 同步指数 ·
             <code>--sync.incremental</code> 每日增量<br>
-            市场 / 选股 / 回测三个模块从 M2 起逐个落地，完整规划见 <code>docs/ARCHITECTURE.md</code>。
+            选股与回测模块按 M3 / M4 逐个落地，完整规划见 <code>docs/ARCHITECTURE.md</code>。
         </div>
     </div>
 

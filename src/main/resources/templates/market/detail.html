@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/skeleton :: head(${detail.instrument.name})}"></head>
+<body>
+
+<header th:replace="~{layout/skeleton :: nav('market')}"></header>
+
+<main class="wrap" th:with="ins=${detail.instrument}, bar=${detail.latestBar()}">
+
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title">
+                <a class="back" th:href="@{/market}">← 市场</a>
+                <span th:text="${ins.name}">浦发银行</span>
+                <span class="code" th:text="${ins.instrumentId}">600000.SH</span>
+            </div>
+            <div class="card-sub" th:if="${detail.dataAsOf() != null}" th:text="${detail.dataAsOf()}"></div>
+        </div>
+
+        <div class="quote-grid">
+            <div class="quote-item">
+                <div class="quote-label">最新价</div>
+                <div class="quote-val"
+                     th:classappend="${detail.latestPctChg() != null} ? (${detail.latestPctChg() > 0} ? 'up' : (${detail.latestPctChg() < 0} ? 'down' : 'flat')) : ''"
+                     th:text="${detail.latestPrice() != null} ? ${#numbers.formatDecimal(detail.latestPrice(), 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">涨跌幅</div>
+                <div class="quote-val"
+                     th:classappend="${detail.latestPctChg() != null} ? (${detail.latestPctChg() > 0} ? 'up' : (${detail.latestPctChg() < 0} ? 'down' : 'flat')) : ''"
+                     th:text="${detail.latestPctChg() != null} ? ${(detail.latestPctChg() > 0 ? '+' : '') + #numbers.formatDecimal(detail.latestPctChg() * 100, 1, 2) + '%'} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">今开</div>
+                <div class="quote-val" th:text="${bar != null} ? ${#numbers.formatDecimal(bar.open, 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">最高</div>
+                <div class="quote-val" th:text="${bar != null} ? ${#numbers.formatDecimal(bar.high, 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">最低</div>
+                <div class="quote-val" th:text="${bar != null} ? ${#numbers.formatDecimal(bar.low, 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">成交量</div>
+                <div class="quote-val"
+                     th:text="${bar != null and bar.volume != null} ? (${bar.volume >= 1000000} ? ${#numbers.formatDecimal(bar.volume / 1000000.0, 1, 2) + ' 万手'} : ${#numbers.formatInteger(bar.volume / 100, 1, 'COMMA') + ' 手'}) : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">成交额</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.amount != null} ? ${#numbers.formatDecimal(detail.snapshot.amount / 100000000.0, 1, 2) + ' 亿'} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">换手率</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.turnoverRate != null} ? ${#numbers.formatDecimal(detail.snapshot.turnoverRate * 100, 1, 2) + '%'} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">PE-TTM</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.peTtm != null} ? ${#numbers.formatDecimal(detail.snapshot.peTtm, 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">PB</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.pb != null} ? ${#numbers.formatDecimal(detail.snapshot.pb, 1, 2)} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">总市值</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.totalMv != null} ? ${#numbers.formatDecimal(detail.snapshot.totalMv / 100000000.0, 1, 2) + ' 亿'} : '--'">--</div>
+            </div>
+            <div class="quote-item">
+                <div class="quote-label">流通市值</div>
+                <div class="quote-val"
+                     th:text="${detail.snapshot != null and detail.snapshot.circMv != null} ? ${#numbers.formatDecimal(detail.snapshot.circMv / 100000000.0, 1, 2) + ' 亿'} : '--'">--</div>
+            </div>
+        </div>
+
+        <div class="hint" style="margin-top:10px"
+             th:text="|${ins.instrumentType == 'STOCK' ? '股票' : (ins.instrumentType == 'ETF' ? 'ETF' : '指数')}
+                       · ${ins.board == 'MAIN' ? '沪深主板' : (ins.board == 'GEM' ? '创业板' : (ins.board == 'STAR' ? '科创板' : (ins.board == 'BSE' ? '北交所' : ins.board)))}
+                       · 上市 ${ins.listedAt != null ? ins.listedAt : '未知'} · 日K 前复权（QFQ）|">
+        </div>
+    </div>
+
+    <div class="card section-gap">
+        <div class="card-hd">
+            <div class="card-title">日K</div>
+            <div class="range-tabs">
+                <a th:each="r : ${ranges}" class="btn btn-sm"
+                   th:classappend="${r == detail.range} ? 'active'"
+                   th:href="@{/market/stock/{id}(id=${ins.instrumentId},range=${r.key()})}"
+                   th:text="${r.label}">近 6 月</a>
+            </div>
+        </div>
+
+        <div th:if="${!#lists.isEmpty(detail.bars)}" id="kline-chart" class="kline-chart"></div>
+        <div th:if="${#lists.isEmpty(detail.bars)}" class="empty">
+            该标的在所选区间内没有日K数据（可能上市不足，或尚未执行日K同步）
+        </div>
+    </div>
+
+</main>
+
+<script th:src="@{/js/echarts.min.js?v=5.5.0}"></script>
+<script th:inline="javascript">
+    window.__KLINE__ = {
+        dates: /*[[${detail.chart.dates}]]*/ [],
+        candles: /*[[${detail.chart.candles}]]*/ [],
+        volumes: /*[[${detail.chart.volumes}]]*/ []
+    };
+</script>
+<div th:replace="~{layout/skeleton :: scripts}"></div>
+
+</body>
+</html>

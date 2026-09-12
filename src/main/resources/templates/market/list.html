@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/skeleton :: head('市场')}"></head>
+<body>
+
+<header th:replace="~{layout/skeleton :: nav('market')}"></header>
+
+<main class="wrap">
+
+    <!-- 指数概览条 -->
+    <div class="idx" th:if="${!#lists.isEmpty(indexQuotes)}">
+        <div class="idx-item" th:each="q : ${indexQuotes}">
+            <div class="idx-name" th:text="${q.name}">上证指数</div>
+            <div class="idx-val"
+                 th:classappend="${q.pctChg != null} ? (${q.pctChg > 0} ? 'up' : (${q.pctChg < 0} ? 'down' : 'flat')) : ''"
+                 th:text="${q.close != null} ? ${#numbers.formatDecimal(q.close, 1, 2)} : '--'">--</div>
+            <div class="idx-chg"
+                 th:classappend="${q.pctChg != null} ? (${q.pctChg > 0} ? 'up' : (${q.pctChg < 0} ? 'down' : 'flat')) : ''"
+                 th:if="${q.pctChg != null}"
+                 th:text="|${q.pctChg > 0 ? '+' : ''}${#numbers.formatDecimal(q.pctChg * 100, 1, 2)}%  ${q.change > 0 ? '+' : ''}${#numbers.formatDecimal(q.change, 1, 2)}|">
+                --</div>
+            <div class="idx-chg flat" th:if="${q.pctChg == null}">数据待同步</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title">全市场标的</div>
+            <div class="card-sub" th:if="${summary.fetchedAt != null}"
+                 th:text="|快照覆盖 ${#numbers.formatInteger(summary.covered, 1, 'COMMA')} 只 · 抓取于 ${summary.fetchedAtDisplay()}|">
+            </div>
+            <div class="card-sub" th:if="${summary.fetchedAt == null}">尚无快照数据</div>
+        </div>
+
+        <div class="notice" th:if="${summary.covered == 0}" style="margin-bottom:12px">
+            尚未同步市场快照，价格与估值列将显示 <code>--</code>。执行
+            <code>--sync.snapshot</code> 补全数据。
+        </div>
+
+        <form id="market-filters" class="toolbar" onsubmit="return false">
+            <input type="text" name="keyword" placeholder="搜索代码或名称"
+                   th:value="${result.query.keyword}"
+                   hx-get="/fragments/market/table" hx-trigger="input changed delay:400ms, search"
+                   hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
+                   hx-indicator="#market-loading">
+            <select name="board"
+                    hx-get="/fragments/market/table" hx-trigger="change"
+                    hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
+                    hx-indicator="#market-loading">
+                <option value="">全部板块</option>
+                <option value="MAIN" th:selected="${result.query.board == 'MAIN'}">沪深主板</option>
+                <option value="GEM" th:selected="${result.query.board == 'GEM'}">创业板</option>
+                <option value="STAR" th:selected="${result.query.board == 'STAR'}">科创板</option>
+                <option value="BSE" th:selected="${result.query.board == 'BSE'}">北交所</option>
+                <option value="ETF" th:selected="${result.query.board == 'ETF'}">ETF</option>
+            </select>
+            <select name="type"
+                    hx-get="/fragments/market/table" hx-trigger="change"
+                    hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
+                    hx-indicator="#market-loading">
+                <option value="">全部类型</option>
+                <option value="STOCK" th:selected="${result.query.instrumentType == 'STOCK'}">股票</option>
+                <option value="ETF" th:selected="${result.query.instrumentType == 'ETF'}">ETF</option>
+            </select>
+            <select name="size" class="size-select"
+                    hx-get="/fragments/market/table" hx-trigger="change"
+                    hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
+                    hx-indicator="#market-loading">
+                <option value="20" th:selected="${result.query.size == 20}">每页 20 条</option>
+                <option value="50" th:selected="${result.query.size == 50}">每页 50 条</option>
+                <option value="100" th:selected="${result.query.size == 100}">每页 100 条</option>
+            </select>
+            <span id="market-loading" class="card-sub htmx-indicator">加载中…</span>
+        </form>
+
+        <div th:replace="~{fragments/market-table :: table}"></div>
+    </div>
+
+</main>
+
+<div th:replace="~{layout/skeleton :: scripts}"></div>
+</body>
+</html>

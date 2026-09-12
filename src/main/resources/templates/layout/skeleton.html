@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<!--
+  页面骨架片段。页面通过以下方式组合：
+    <head th:replace="~{layout/skeleton :: head('标题')}">
+    <header th:replace="~{layout/skeleton :: nav('market')}">
+    <div th:replace="~{layout/skeleton :: scripts}">
+  用法参考 docs/FRONTEND_GUIDE.md 第 3 节。
+-->
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="|financeAgent · ${title}|">financeAgent</title>
+    <link rel="stylesheet" th:href="@{/css/app.css?v=2}">
+</head>
+<body>
+
+<header th:fragment="nav(active)">
+    <div class="wrap nav">
+        <a class="logo" th:href="@{/}">finance<em>Agent</em></a>
+        <nav class="tabs">
+            <a class="tab" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/}">总览</a>
+            <a class="tab" th:classappend="${active == 'market'} ? 'active'" th:href="@{/market}">市场</a>
+            <span class="tab disabled" title="M3 开发中">选股</span>
+            <span class="tab disabled" title="M4 开发中">回测</span>
+        </nav>
+    </div>
+</header>
+
+<div th:fragment="scripts">
+    <script th:src="@{/js/htmx.min.js?v=2.0.4}"></script>
+    <script th:src="@{/js/alpine.min.js?v=3.14.8}" defer></script>
+    <script th:src="@{/js/app.js?v=2}"></script>
+</div>
+
+</body>
+</html>
