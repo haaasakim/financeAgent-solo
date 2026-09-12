@@ -20,7 +20,7 @@ flowchart TD
     A["页面层<br/>Thymeleaf + HTMX + Alpine.js + ECharts"] --> B
     B["应用层<br/>Controller + Service"] --> C
     C["领域层<br/>Indicator / Screener / Backtest"] --> D
-    D["数据层<br/>Repository + Provider"] --> E
+    D["数据层<br/>Mapper + Provider"] --> E
     E["存储层<br/>SQLite (WAL)"]
     D -.外部 HTTP.-> F["外部数据源<br/>腾讯 / 新浪 / 巨潮 / 东财"]
 ```
@@ -33,7 +33,7 @@ flowchart TD
 | 应用层 | 参数校验、编排、事务边界、视图模型组装 | 写业务算法；出现裸 SQL |
 | 领域层 | 指标计算、选股规则求值、回测撮合 | 依赖 Spring Web；直接访问外部数据源 |
 | 数据层 | SQL 执行、外部数据源适配与解析 | 出现业务判断（如「该不该买入」） |
-| 存储层 | 持久化 | 被绕过（任何写库都必须经 Repository） |
+| 存储层 | 持久化 | 被绕过（任何写库都必须经 Mapper） |
 
 ## 3. 包结构
 
@@ -43,8 +43,11 @@ org.haaasaki.financeagent
 ├── config/                     配置类（数据源、调度、线程池、Jackson、Web）
 ├── common/                     工具、异常、常量、通用枚举
 ├── data/                       数据访问层
-│   ├── model/                  持久化 POJO（与表一一对应）
-│   ├── repository/             SQL 执行（JdbcClient），一个表一个类
+│   ├── migration/              SQL 迁移器（自研，按版本执行 db/migration/V*.sql）
+│   ├── model/                  持久化 record（与表一一对应）
+│   ├── mapper/                 MyBatis Mapper 接口（SQL 在 resources/mapper/*.xml）
+│   ├── mybatis/                MyBatis 扩展（如 SQLite 的日期 TypeHandler）
+│   ├── support/                数据层小工具（板块判定、统计组装等）
 │   ├── provider/               外部数据源适配
 │   │   ├── QuoteProvider       行情接口（日K / 分钟K / 快照）
 │   │   ├── AnnouncementProvider 公告接口
@@ -145,7 +148,7 @@ sequenceDiagram
     participant U as 浏览器
     participant C as MarketController
     participant S as MarketService
-    participant R as Repository
+    participant R as Mapper
     participant D as SQLite
 
     U->>C: GET /market/stock/600000
@@ -169,9 +172,9 @@ sequenceDiagram
 | 构建 | Maven Wrapper | 本机无命令行 mvn，用 `./mvnw` 保证可复现 |
 | Web | Spring Boot 3.x（最新稳定版） | 以 Maven Central 实际可用版本为准 |
 | 模板 | Thymeleaf | starter-thymeleaf |
-| 数据访问 | Spring JDBC `JdbcClient` | 不引 ORM，SQL 可控 |
+| 数据访问 | MyBatis | Mapper 接口 + XML SQL，SQL 完全可控且集中可审 |
 | 数据库 | SQLite | `org.xerial:sqlite-jdbc`，WAL 模式 |
-| 迁移 | Flyway | SQL 文件版本化，禁止手工改库结构 |
+| 迁移 | 自研轻量迁移器 | `db/migration/V*.sql` 按版本执行，禁止手工改库结构。不用 Flyway：社区版无 SQLite 支持，其 sqlite 模块（`flyway-database-nc-sqlite`）许可与版本均不确定 |
 | 前端交互 | HTMX + Alpine.js | 本地静态资源，不走 CDN |
 | 图表 | ECharts | 本地静态资源 |
 | 任务调度 | Spring `@Scheduled` + 自建线程池 | 不引 Quartz |

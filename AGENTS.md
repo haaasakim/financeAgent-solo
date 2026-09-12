@@ -24,9 +24,9 @@
 
 ## 3. 技术栈
 
-Java 21 · Spring Boot 3.x · Thymeleaf + HTMX + Alpine.js · ECharts · SQLite(WAL) · Spring JDBC(`JdbcClient`) · Flyway · Maven Wrapper
+Java 21 · Spring Boot 3.x · Thymeleaf + HTMX + Alpine.js · ECharts · SQLite(WAL) · MyBatis · 自研 SQL 迁移器 · Maven Wrapper
 
-不引入：微服务、消息队列、Redis、ORM、Node 构建链。
+不引入：微服务、消息队列、Redis、JPA/Hibernate、Node 构建链。
 
 ## 4. 项目地图
 
@@ -46,7 +46,7 @@ src/main/java/org/haaasaki/financeagent/
   config/  common/  data/  indicator/  screener/  backtest/  market/  web/
 src/main/resources/
   templates/  static/  application.yml
-  db/migration/              Flyway 迁移脚本
+  db/migration/              SQL 迁移脚本（V*.sql）
 ```
 
 ## 5. 文档索引

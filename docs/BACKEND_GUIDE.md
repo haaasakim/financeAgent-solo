@@ -22,7 +22,7 @@ flowchart TD
 | Controller 里出现业务判断或 SQL | 无法测试、职责混乱 |
 | 领域层依赖 Spring Web 或 HttpServletRequest | 破坏可测试性 |
 | 领域层直接发外部 HTTP | 绕过 Provider 的限速与重试 |
-| Repository 里出现业务规则 | 业务规则散落，回测无法复用 |
+| Mapper 里出现业务规则 | 业务规则散落，回测无法复用 |
 | `indicator` 包依赖任何 I/O | 指标必须是可单测的纯函数 |
 
 ## 2. Controller 约定
@@ -36,26 +36,30 @@ flowchart TD
 
 ## 3. Service 约定
 
-- **事务边界在 Service 层**，`@Transactional` 不加在 Controller 或 Repository 上。
+- **事务边界在 Service 层**，`@Transactional` 不加在 Controller 或 Mapper 上。
 - 公开方法即用例，命名用动词短语：`syncDailyBars`、`runScreener`、`executeBacktest`。
 - 返回视图对象（VO / record），不把数据库实体暴露给上层。
 - 长耗时工作（同步、回测）**不在请求线程执行**，只投递任务并立即返回。
 
 ## 4. SQL 与数据访问
 
-统一使用 Spring JDBC 的 `JdbcClient`，**不引入 ORM**。
+持久层使用 **MyBatis**：Mapper 接口在 `data/mapper`，SQL 在 `resources/mapper/*.xml`。
+保留 `spring-boot-starter-jdbc` 仅为提供 DataSource，以及让迁移器用 JdbcTemplate 执行 DDL。
 
-- 一个表对应一个 Repository 类，如 `DailyBarRepository`。
-- SQL 以文本块（text block）常量书写，禁止字符串拼接。
-- **所有变量必须参数化**，任何情况下不得把用户输入拼接进 SQL。选股条件 DSL 也不例外——DSL 只映射到**预定义好的字段名与运算符**，字段名来自白名单枚举，不来自用户字符串。
+- 一个表对应一个 Mapper，如 `DailyBarMapper`。
+- **SQL 只写在 XML 里**，不用注解式 SQL，也不在 Java 里拼 SQL——集中一处便于审阅与优化。
+- **所有变量必须用 `#{}` 占位，禁止 `${}` 拼接**。选股条件 DSL 也不例外——DSL 只映射到**预定义好的字段名与运算符**，字段名来自白名单枚举，不来自用户字符串。
+- record 用 `<constructor>` 显式映射，参数顺序必须与 record 头部一致。
+- **原始类型的 `javaType` 必须用下划线别名**（`_double` / `_long` / `_int`）。MyBatis 的别名 `double` 指向的是包装类 `Double`，配原始类型的 record 组件会报 `NoSuchMethodException`。
+- 批量写入用 `<foreach>` 拼多值 INSERT。SQLite 绑定变量上限 32,766（≥ 3.32），500 条 × 17 列 = 8,500 个参数，安全。
 - 写入统一使用 upsert 保证幂等：
 
 ```sql
 INSERT INTO daily_bar (instrument_id, trade_date, open, high, low, close, ...)
-VALUES (:instrumentId, :tradeDate, :open, :high, :low, :close, ...)
+VALUES (#{instrumentId}, #{tradeDate}, #{open}, #{high}, #{low}, #{close}, ...)
 ON CONFLICT (instrument_id, trade_date) DO UPDATE SET
     open = excluded.open, high = excluded.high, low = excluded.low,
-    close = excluded.close, updated_at = CURRENT_TIMESTAMP;
+    close = excluded.close, updated_at = excluded.updated_at;
 ```
 
 - 批量写入按 **500 条一批** 提交，避免长事务与内存膨胀。
@@ -101,10 +105,27 @@ finance:
 
 ## 8. 日志
 
+框架：**SLF4J + Logback**。appender、滚动策略与格式在 `src/main/resources/logback-spring.xml`，
+级别开关留在 `application.yml` 的 `logging.level`（改级别比改 XML 方便）。
+
+| 输出 | 用途 | 策略 |
+|---|---|---|
+| 控制台 | 开发时扫读 | `HH:mm:ss.SSS` + 级别着色 + 短类名 |
+| `logs/financeagent.log` | 排查 | 完整时间戳 + 线程 + 类名；50MB 或跨天滚动，gzip 归档到 `logs/archive/`，保留 30 天 / 上限 2GB |
+| `logs/error.log` | 同步结束后快速定位 | 仅 WARN 及以上，保留 60 天 / 上限 500MB |
+
+文件写入走 `AsyncAppender`（队列 2048、`discardingThreshold=0`）。**队列满时阻塞而非丢弃**——同步任务一次可能连跑数小时，不能让 IO 拖慢主流程，但日志完整性优先于吞吐。
+
+`logs/` 已在 `.gitignore` 中，不入版本控制。
+
+编码规范：
+
 - 使用 SLF4J 占位符写法，禁止字符串拼接。
-- 同步任务必须记录：任务名、起止时间、处理条数、成功/失败数、失败原因摘要。
+- 同步任务必须记录：任务名、起止时间、处理条数、成功/失败数、失败原因摘要，以及**进度**（每 500 个标的打一条 INFO）。
+- 单标的失败用 `WARN` 并继续，不中断整批；任务结束时汇总成败数量。
 - 回测任务必须记录：策略版本、参数、区间、耗时。
 - 日志脱敏：不打印密钥、Token、完整响应体（只打印摘要或长度）。
+- 第三方库已降噪（Hikari / Spring / Apache → WARN）。排查连接池等问题时在 `logback-spring.xml` 中单独放开，不要整体调到 DEBUG。
 
 ## 9. 异步任务
 
@@ -129,7 +150,7 @@ finance:
 | 层次 | 要求 |
 |---|---|
 | `indicator` | 纯函数单测，用固定输入输出对拍，覆盖边界（空序列、单点、除零） |
-| Repository | 用真实 SQLite 临时库测试真实 SQL，不用 Mock |
+| Mapper | 用真实 SQLite 临时库测试真实 SQL，不用 Mock |
 | Provider | 用固定响应样本测解析（含编码、字段顺序、单位换算），不发真实请求 |
 | 回测引擎 | 固定区间 + 固定数据快照，断言净值与交易明细，保证可复现 |
 | Service | 关键用例的成功与主要失败路径 |
@@ -143,3 +164,4 @@ finance:
 - 优先使用 `switch` 表达式与模式匹配（Java 21 已支持）。
 - 使用 `Optional` 表达可能缺失的返回值，**禁止返回 null 集合**（返回空集合）。
 - 公共方法必须有 Javadoc 说明单位与口径；涉及金融语义的方法必须标明复权方式与时点。
+- record 的**每个组件都必须有 `@param` 注释**，说明单位与缺失语义。record 没有 getter/setter，字段说明只能由类级 Javadoc 承载，IDE 悬停提示也来自这里。

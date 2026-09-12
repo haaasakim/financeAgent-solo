@@ -14,7 +14,7 @@
 
 ## 技术栈
 
-Java 21 · Spring Boot 3.x · Thymeleaf + HTMX + Alpine.js · ECharts · SQLite(WAL) · Spring JDBC · Flyway · Maven Wrapper
+Java 21 · Spring Boot 3.x · Thymeleaf + HTMX + Alpine.js · ECharts · SQLite(WAL) · MyBatis · Maven Wrapper
 
 数据全部本地化：外部行情抓取后落 SQLite，页面渲染不发起外部请求。
 
@@ -55,7 +55,7 @@ src/main/java/org/haaasaki/financeagent/
   web/                     控制器与视图模型
 src/main/resources/
   templates/  static/      页面与静态资源
-  db/migration/            Flyway 迁移脚本
+  db/migration/            SQL 迁移脚本（V*.sql）
 ```
 
 ## 数据来源

@@ -177,7 +177,7 @@ erDiagram
 - 所有表必须有 `created_at`；可变表需有 `updated_at`。
 - 金额与价格字段不允许 NULL 表示 0，NULL 仅表示未知。
 - 索引：`daily_bar(trade_date)`（按日全市场扫描）、`factor_daily(trade_date)`、`event(instrument_id, event_date)`。
-- 数据库结构变更一律通过 Flyway 迁移脚本，**禁止手工改库**。
+- 数据库结构变更一律通过 `src/main/resources/db/migration/V*.sql` 迁移脚本，**禁止手工改库**。
 
 ## 10. 合规边界
 
