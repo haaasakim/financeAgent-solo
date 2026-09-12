@@ -1,0 +1,105 @@
+/*
+  financeAgent 全站样式。
+  配色与 docs/ui-demo/index.html 的设计稿保持一致：浅色、紧凑、涨红跌绿。
+  颜色统一用 CSS 变量，模板与 JS 不写死色值。
+*/
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #F7F7F5;
+  --card: #FFFFFF;
+  --border: #E5E5E1;
+  --border-l: #F0F0EC;
+  --text: #1F1F1D;
+  --text-2: #6B6B66;
+  --text-3: #9B9B95;
+  --primary: #185FA5;
+  --primary-l: #E6F1FB;
+  --up: #D9363E;
+  --down: #1D9E75;
+  --flat: #888780;
+}
+
+body {
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wrap { max-width: 1440px; margin: 0 auto; padding: 0 24px; }
+
+header {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.nav { display: flex; align-items: center; gap: 36px; height: 56px; }
+.logo { font-size: 15px; font-weight: 500; }
+.logo em { font-style: normal; color: var(--primary); }
+
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 6px 15px; border-radius: 6px; color: var(--text-2); font-size: 13px; }
+.tab.active { background: var(--primary); color: #fff; }
+.tab.disabled { color: var(--text-3); cursor: not-allowed; }
+
+main { padding: 20px 0 60px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.card-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+.card-title { font-size: 13px; font-weight: 500; }
+.card-sub { font-size: 12px; color: var(--text-3); }
+
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.metric-label { font-size: 11px; color: var(--text-3); margin-bottom: 6px; }
+.metric-val { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.metric-sub { font-size: 11px; color: var(--text-3); margin-top: 4px; }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-weight: 400; color: var(--text-2); font-size: 12px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td { padding: 10px 12px; border-bottom: 1px solid var(--border-l); white-space: nowrap; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: #FBFBF9; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--flat); }
+
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; }
+.tag-ok { background: #E1F5EE; color: #0F6E56; }
+.tag-warn { background: #FAEEDA; color: #854F0B; }
+.tag-err { background: #FCEBEB; color: #A32D2D; }
+
+.empty { padding: 32px; text-align: center; color: var(--text-3); font-size: 12px; }
+
+code {
+  font-family: ui-monospace, Menlo, monospace;
+  background: #F5F5F2;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.hint { font-size: 12px; color: var(--text-2); line-height: 2; }
+.section-gap { margin-top: 16px; }
+
+@media (max-width: 900px) {
+  .metrics { grid-template-columns: repeat(2, 1fr); }
+  .wrap { padding: 0 14px; }
+  .nav { gap: 14px; }
+}

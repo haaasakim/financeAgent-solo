@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>financeAgent · 数据总览</title>
+    <link rel="stylesheet" th:href="@{/css/app.css?v=1}">
+</head>
+<body>
+
+<header>
+    <div class="wrap nav">
+        <div class="logo">finance<em>Agent</em></div>
+        <div class="tabs">
+            <span class="tab active">总览</span>
+            <span class="tab disabled" title="M2 开发中">市场</span>
+            <span class="tab disabled" title="M3 开发中">选股</span>
+            <span class="tab disabled" title="M4 开发中">回测</span>
+        </div>
+    </div>
+</header>
+
+<main class="wrap">
+
+    <!-- 有数据 -->
+    <div th:if="${!stats.isEmpty()}">
+        <div class="metrics">
+            <div class="metric">
+                <div class="metric-label">标的字典</div>
+                <div class="metric-val" th:text="${#numbers.formatInteger(stats.instrumentTotal, 1, 'COMMA')}">0</div>
+                <div class="metric-sub"
+                     th:text="|股票 ${#numbers.formatInteger(stats.stockTotal, 1, 'COMMA')} · ETF ${#numbers.formatInteger(stats.etfTotal, 1, 'COMMA')}|">
+                </div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">日K行数</div>
+                <div class="metric-val" th:text="${#numbers.formatInteger(stats.dailyBarTotal, 1, 'COMMA')}">0</div>
+                <div class="metric-sub" th:text="|前复权 · 日频|"></div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">已覆盖标的</div>
+                <div class="metric-val" th:text="${#numbers.formatInteger(stats.coveredInstruments, 1, 'COMMA')}">0</div>
+                <div class="metric-sub"
+                     th:if="${stats.instrumentTotal > 0}"
+                     th:text="|覆盖率 ${#numbers.formatDecimal(stats.coveredInstruments * 100.0 / stats.instrumentTotal, 1, 1)}%|">
+                </div>
+            </div>
+            <div class="metric">
+                <div class="metric-label">数据日期范围</div>
+                <div class="metric-val" style="font-size:15px"
+                     th:text="${stats.minTradeDate} != null ? |${stats.minTradeDate} ~ ${stats.maxTradeDate}| : '无数据'">
+                </div>
+                <div class="metric-sub">交易日 · Asia/Shanghai</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 空库引导 -->
+    <div th:if="${stats.isEmpty()}" class="card">
+        <div class="card-hd">
+            <div class="card-title">尚无数据</div>
+            <div class="card-sub">数据库已就绪，等待首次同步</div>
+        </div>
+        <div class="hint">
+            1. 同步标的字典（股票 + ETF 全市场）：<code>--sync.instruments</code><br>
+            2. 初始化 10 年日K：<code>--sync.init=0</code>（约 3 小时，建议挂着跑）<br>
+            3. 之后每日增量更新：<code>--sync.incremental</code>
+        </div>
+    </div>
+
+    <!-- 最近同步 -->
+    <div class="card section-gap">
+        <div class="card-hd">
+            <div class="card-title">最近同步记录</div>
+            <div class="card-sub">来自 sync_log，最多展示 10 条</div>
+        </div>
+        <table>
+            <thead>
+            <tr>
+                <th>任务</th>
+                <th>状态</th>
+                <th class="num">总数</th>
+                <th class="num">成功</th>
+                <th class="num">失败</th>
+                <th>完成时间</th>
+                <th>说明</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(recentSyncs)}">
+                <td colspan="7" class="empty">暂无同步记录，先执行一次同步</td>
+            </tr>
+            <tr th:each="s : ${recentSyncs}">
+                <td th:text="${s.taskName}">TASK</td>
+                <td>
+                    <span class="tag"
+                          th:classappend="${s.success} ? 'tag-ok' : (${s.failed} ? 'tag-err' : 'tag-warn')"
+                          th:text="${s.status}">STATUS</span>
+                </td>
+                <td class="num" th:text="${#numbers.formatInteger(s.totalCount, 1, 'COMMA')}">0</td>
+                <td class="num" th:text="${#numbers.formatInteger(s.successCount, 1, 'COMMA')}">0</td>
+                <td class="num" th:text="${#numbers.formatInteger(s.failCount, 1, 'COMMA')}">0</td>
+                <td th:text="${s.finishedAt}">-</td>
+                <td th:title="${s.message}"
+                    th:text="${s.message} != null ? ${#strings.abbreviate(s.message, 60)} : '--'">--</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 下一步 -->
+    <div class="card section-gap">
+        <div class="card-hd">
+            <div class="card-title">下一步</div>
+            <div class="card-sub">当前进度：M1 数据层已完成</div>
+        </div>
+        <div class="hint">
+            同步通过命令行触发（异步任务框架将在 M2 提供，届时可在页面上直接发起并观察进度）：<br>
+            <code>--sync.instruments</code> 同步标的字典 ·
+            <code>--sync.init=N</code> 初始化日K（N=0 为全量）·
+            <code>--sync.incremental</code> 每日增量<br>
+            市场 / 选股 / 回测三个模块从 M2 起逐个落地，完整规划见 <code>docs/ARCHITECTURE.md</code>。
+        </div>
+    </div>
+
+</main>
+
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>financeAgent · 出错了</title>
+    <link rel="stylesheet" th:href="@{/css/app.css?v=1}">
+</head>
+<body>
+
+<header>
+    <div class="wrap nav">
+        <div class="logo">finance<em>Agent</em></div>
+        <div class="tabs">
+            <span class="tab active">总览</span>
+        </div>
+    </div>
+</header>
+
+<main class="wrap">
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title">
+                <span th:text="${status} ?: '错误'">404</span>
+                <span th:text="${error} ?: ''">Not Found</span>
+            </div>
+            <div class="card-sub" th:text="${timestamp} ?: ''"></div>
+        </div>
+
+        <div class="hint">
+            <p th:text="${message} ?: '请求无法完成。'">请求无法完成。</p>
+            <p th:if="${path != null}">
+                请求路径：<code th:text="${path}"></code>
+            </p>
+        </div>
+
+        <div style="margin-top:16px">
+            <a th:href="@{/}" style="color:var(--primary);text-decoration:none">← 返回数据总览</a>
+        </div>
+    </div>
+</main>
+
+</body>
+</html>
