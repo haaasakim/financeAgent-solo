@@ -34,7 +34,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
     private static final String HEAVY = "============================================================";
     private static final String THIN = "------------------------------------------------------------";
     private static final String SYNC_HINT =
-            " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.incremental";
+            " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.incremental\n"
+                    + "              --sync.snapshot（市场快照）| --sync.indexes（指数）";
 
     private final DataStatisticsService statisticsService;
     private final ApplicationContext applicationContext;
@@ -65,7 +66,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
                     + " 数据状态   : 空库，尚无任何标的与行情\n"
                     + THIN + "\n"
                     + SYNC_HINT + "\n"
-                    + " 首次使用   : 先执行 --sync.instruments，再执行 --sync.init=0\n"
+                    + " 首次使用   : 先执行 --sync.instruments，再执行 --sync.init=0，"
+                    + "然后 --sync.snapshot 与 --sync.indexes\n"
                     + HEAVY;
         }
 

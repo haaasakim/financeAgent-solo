@@ -9,12 +9,15 @@ import java.util.Map;
 
 import org.haaasaki.financeagent.common.exception.DataIntegrityException;
 import org.haaasaki.financeagent.common.exception.DataSyncException;
+import org.haaasaki.financeagent.config.MarketProperties;
 import org.haaasaki.financeagent.data.mapper.DailyBarMapper;
 import org.haaasaki.financeagent.data.mapper.InstrumentMapper;
+import org.haaasaki.financeagent.data.mapper.MarketSnapshotMapper;
 import org.haaasaki.financeagent.data.mapper.SyncLogMapper;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.model.Instrument;
 import org.haaasaki.financeagent.data.model.InstrumentSnapshot;
+import org.haaasaki.financeagent.data.model.MarketSnapshot;
 import org.haaasaki.financeagent.data.provider.QuoteProvider;
 import org.haaasaki.financeagent.data.provider.SnapshotProvider;
 import org.haaasaki.financeagent.data.support.BoardClassifier;
@@ -22,11 +25,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 行情数据同步服务。
  *
- * <p>三个入口：标的字典同步、日K全量初始化、日K增量更新。
+ * <p>入口：标的字典同步、日K全量初始化、日K增量更新、市场快照同步、指数同步。
  *
  * <p><b>除权检测</b>是本服务的核心逻辑。前复权价在每次除权后会整体重算，
  * 若只做增量追加，历史数据会与新数据处于不同复权基准上。因此增量同步时：
@@ -55,26 +59,38 @@ public class MarketDataSyncService {
     private final InstrumentMapper instrumentMapper;
     private final DailyBarMapper dailyBarMapper;
     private final SyncLogMapper syncLogMapper;
+    private final MarketSnapshotMapper marketSnapshotMapper;
     private final QuoteProvider quoteProvider;
     private final SnapshotProvider snapshotProvider;
+    private final MarketProperties marketProperties;
+    private final TransactionTemplate transactionTemplate;
     private final int historyYears;
     private final int batchSize;
+    private final int snapshotMinTotal;
 
     public MarketDataSyncService(
             InstrumentMapper instrumentMapper,
             DailyBarMapper dailyBarMapper,
             SyncLogMapper syncLogMapper,
+            MarketSnapshotMapper marketSnapshotMapper,
             QuoteProvider quoteProvider,
             SnapshotProvider snapshotProvider,
+            MarketProperties marketProperties,
+            TransactionTemplate transactionTemplate,
             @Value("${finance.sync.history-years:10}") int historyYears,
-            @Value("${finance.sync.batch-size:500}") int batchSize) {
+            @Value("${finance.sync.batch-size:500}") int batchSize,
+            @Value("${finance.sync.snapshot-min-total:5000}") int snapshotMinTotal) {
         this.instrumentMapper = instrumentMapper;
         this.dailyBarMapper = dailyBarMapper;
         this.syncLogMapper = syncLogMapper;
+        this.marketSnapshotMapper = marketSnapshotMapper;
         this.quoteProvider = quoteProvider;
         this.snapshotProvider = snapshotProvider;
+        this.marketProperties = marketProperties;
+        this.transactionTemplate = transactionTemplate;
         this.historyYears = historyYears;
         this.batchSize = batchSize;
+        this.snapshotMinTotal = snapshotMinTotal;
     }
 
     /** 同步全市场标的字典（股票 + ETF）。 */
@@ -210,6 +226,173 @@ public class MarketDataSyncService {
         recordSyncLog(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
         log.info("日K增量完成：{}", message);
         return new SyncResult(taskName, status, targets.size(), success, fail, message);
+    }
+
+    /**
+     * 同步全市场最新快照（行情 + 估值）。
+     *
+     * <p>整批语义：先完成全量拉取、条数校验与映射，再在一个事务内分批 upsert；
+     * 任一步失败即整体回滚，不留下部分写入。落库后再次核对行数，防止静默丢失。
+     *
+     * <p>校验不通过抛 {@link DataIntegrityException}（不可重试）：包含返回为空、
+     * 总数低于下限、低于已有标的数的 90%、映射条数不一致、落库条数不一致。
+     */
+    public SyncResult syncMarketSnapshots() {
+        LocalDateTime startedAt = LocalDateTime.now();
+        String taskName = "SYNC_MARKET_SNAPSHOT";
+        int fetchedCount = 0;
+        try {
+            List<InstrumentSnapshot> stocks = snapshotProvider.fetchStocks();
+            List<InstrumentSnapshot> etfs = snapshotProvider.fetchEtfs();
+            if (stocks.isEmpty() || etfs.isEmpty()) {
+                throw new DataIntegrityException(
+                        "快照返回为空（股票 " + stocks.size() + "，ETF " + etfs.size() + "），整批拒绝");
+            }
+
+            List<InstrumentSnapshot> fetched = new ArrayList<>(stocks.size() + etfs.size());
+            fetched.addAll(stocks);
+            fetched.addAll(etfs);
+            fetchedCount = fetched.size();
+            verifyFetchedSize(fetchedCount);
+
+            String fetchedAt = LocalDateTime.now().toString();
+            List<MarketSnapshot> rows = toSnapshots(fetched, fetchedAt);
+            if (rows.size() != fetched.size()) {
+                throw new DataIntegrityException(
+                        "快照映射条数不一致：拉取 " + fetched.size() + "，有效 " + rows.size());
+            }
+
+            final String runAt = fetchedAt;
+            transactionTemplate.executeWithoutResult(status -> {
+                for (List<MarketSnapshot> batch : partition(rows, batchSize)) {
+                    marketSnapshotMapper.upsertBatch(batch);
+                }
+                long stored = marketSnapshotMapper.countByFetchedAt(runAt);
+                if (stored != rows.size()) {
+                    throw new DataIntegrityException(
+                            "快照落库条数校验失败：期望 " + rows.size() + "，实际 " + stored);
+                }
+            });
+
+            String message = "股票 " + stocks.size() + " + ETF " + etfs.size() + " = " + rows.size() + " 条";
+            recordSyncLog(taskName, snapshotProvider.name(), "SUCCESS",
+                    fetchedCount, rows.size(), 0, message, startedAt);
+            log.info("市场快照同步完成：{}", message);
+            return new SyncResult(taskName, "SUCCESS", fetchedCount, rows.size(), 0, message);
+        } catch (RuntimeException e) {
+            recordSyncLog(taskName, snapshotProvider.name(), "FAILED",
+                    fetchedCount, 0, fetchedCount, e.getMessage(), startedAt);
+            log.warn("市场快照同步失败：{}", e.getMessage());
+            throw e;
+        }
+    }
+
+    /** 对拉取条数做下限与已有标的规模比对，防止接口静默返回部分数据。 */
+    private void verifyFetchedSize(int fetchedCount) {
+        if (fetchedCount < snapshotMinTotal) {
+            throw new DataIntegrityException(
+                    "快照条数 " + fetchedCount + " 低于下限 " + snapshotMinTotal + "，整批拒绝");
+        }
+        long known = instrumentMapper.count();
+        if (known > 0 && fetchedCount < known * 0.9) {
+            throw new DataIntegrityException(
+                    "快照条数 " + fetchedCount + " 不足已有标的数 " + known + " 的 90%，整批拒绝");
+        }
+    }
+
+    private List<MarketSnapshot> toSnapshots(List<InstrumentSnapshot> snapshots, String fetchedAt) {
+        List<MarketSnapshot> rows = new ArrayList<>(snapshots.size());
+        for (InstrumentSnapshot snapshot : snapshots) {
+            String exchange = exchangeOf(snapshot.symbol());
+            if (exchange == null || snapshot.code() == null || snapshot.code().isBlank()) {
+                throw new DataIntegrityException(
+                        "快照出现无法解析的标的：symbol=" + snapshot.symbol() + " code=" + snapshot.code());
+            }
+            rows.add(new MarketSnapshot(
+                    snapshot.code() + "." + exchange,
+                    snapshot.lastPrice(),
+                    snapshot.pctChg(),
+                    snapshot.volume(),
+                    snapshot.amount(),
+                    snapshot.turnoverRate(),
+                    snapshot.peTtm(),
+                    snapshot.pb(),
+                    snapshot.totalMv(),
+                    snapshot.circMv(),
+                    snapshotProvider.name(),
+                    fetchedAt));
+        }
+        return rows;
+    }
+
+    /**
+     * 同步配置中的指数（档案 + 10 年日K）。
+     *
+     * <p>指数清单来自配置而非外部列表接口：它们数量固定、名称稳定，
+     * 用配置声明可以避免「某个指数被源站改名」这种无意义的数据漂移。
+     */
+    public SyncResult syncIndexes() {
+        LocalDateTime startedAt = LocalDateTime.now();
+        String taskName = "SYNC_INDEXES";
+        List<MarketProperties.IndexDef> indexes = marketProperties.indexes();
+        if (indexes == null || indexes.isEmpty()) {
+            throw new DataIntegrityException("未配置指数清单（finance.market.indexes），整批拒绝");
+        }
+
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusYears(historyYears);
+        int success = 0;
+        int fail = 0;
+        List<String> errors = new ArrayList<>();
+
+        for (MarketProperties.IndexDef def : indexes) {
+            try {
+                String[] parts = splitInstrumentId(def.id());
+                String code = parts[0];
+                String exchange = parts[1];
+                instrumentMapper.upsertBatch(List.of(new Instrument(
+                        def.id(), Instrument.TYPE_INDEX, exchange, code, def.name(),
+                        BoardClassifier.INDEX, "CNY", "Asia/Shanghai", null, null,
+                        Instrument.STATUS_LISTED)));
+
+                List<DailyBar> bars = quoteProvider.fetchDailyBars(def.id(), start, end);
+                if (bars.isEmpty()) {
+                    fail++;
+                    errors.add(def.id() + ": 区间内无数据");
+                    continue;
+                }
+                for (List<DailyBar> batch : partition(bars, batchSize)) {
+                    dailyBarMapper.upsertBatch(batch);
+                }
+                instrumentMapper.updateListedAt(def.id(), bars.get(0).tradeDate());
+                success++;
+            } catch (DataIntegrityException | DataSyncException e) {
+                fail++;
+                errors.add(def.id() + ": " + e.getMessage());
+                log.warn("指数同步失败 {} - {}", def.id(), e.getMessage());
+            }
+        }
+
+        String status = fail == 0 ? "SUCCESS" : (success == 0 ? "FAILED" : "PARTIAL");
+        String message = "成功 " + success + "，失败 " + fail
+                + (errors.isEmpty() ? "" : "；" + summarize(errors));
+        recordSyncLog(taskName, quoteProvider.name(), status, indexes.size(), success, fail, message, startedAt);
+        log.info("指数同步完成：{}", message);
+        return new SyncResult(taskName, status, indexes.size(), success, fail, message);
+    }
+
+    /** {@code 600000.SH} → {@code [600000, SH]}，并校验交易所合法。 */
+    private String[] splitInstrumentId(String instrumentId) {
+        int dot = instrumentId == null ? -1 : instrumentId.lastIndexOf('.');
+        if (dot <= 0 || dot == instrumentId.length() - 1) {
+            throw new DataIntegrityException("非法 instrumentId（期望 {code}.{exchange}）: " + instrumentId);
+        }
+        String code = instrumentId.substring(0, dot);
+        String exchange = instrumentId.substring(dot + 1).toUpperCase(Locale.ROOT);
+        if (!exchange.equals("SH") && !exchange.equals("SZ") && !exchange.equals("BJ")) {
+            throw new DataIntegrityException("非法交易所: " + instrumentId);
+        }
+        return new String[] {code, exchange};
     }
 
     /** 与库中重叠日期的收盘价逐条比对，任一不一致即判定发生除权。 */

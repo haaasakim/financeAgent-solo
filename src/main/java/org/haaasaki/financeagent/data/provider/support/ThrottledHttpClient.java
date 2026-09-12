@@ -22,7 +22,8 @@ import org.springframework.stereotype.Component;
  *   <li><b>限速</b>：按配置的 QPS 串行节流。实测腾讯接口 3.3 QPS 连发 30 次零失败，
  *       默认取 5 QPS 留出余量；限流后约 20 秒可恢复。</li>
  *   <li><b>重试</b>：最多 maxRetry 次，指数退避（1s / 2s / 4s）。</li>
- *   <li><b>不重试 4xx</b>：除 429（限流）外，4xx 说明请求本身有问题，重试无意义。</li>
+ *   <li><b>不重试 4xx</b>：除 429（限流）与新浪 456（反爬限流，实测连续全量抓取时出现）外，
+ *       4xx 说明请求本身有问题，重试无意义。</li>
  *   <li><b>编码由调用方指定</b>：腾讯快照接口返回 GBK，JSON 接口为 UTF-8，
  *       解码错误会导致中文乱码，因此不做自动探测。</li>
  * </ul>
@@ -89,7 +90,7 @@ public class ThrottledHttpClient {
                 }
 
                 lastError = new DataSyncException("HTTP " + status + " - " + url);
-                if (status >= 400 && status < 500 && status != 429) {
+                if (status >= 400 && status < 500 && status != 429 && status != 456) {
                     log.warn("请求返回 {}，判定为不可重试：{}", status, url);
                     break;
                 }

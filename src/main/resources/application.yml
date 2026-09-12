@@ -45,6 +45,20 @@ finance:
     # 腾讯单次上限 800 条（约 3.2 年），按 3 年一段切分以保证不触发降级
     segment-years: 3
     batch-size: 500
+    # 快照同步的条数下限：全市场股票 + ETF 正常约 7,200，低于该值视为接口静默降级
+    snapshot-min-total: 5000
+
+  market:
+    # 市场概览条的指数清单，由 --sync.indexes 入库
+    indexes:
+      - id: "000001.SH"
+        name: "上证指数"
+      - id: "399001.SZ"
+        name: "深证成指"
+      - id: "399006.SZ"
+        name: "创业板指"
+      - id: "000300.SH"
+        name: "沪深300"
 
 # 持久层使用 MyBatis：接口在 data/mapper，SQL 在 resources/mapper/*.xml。
 mybatis:

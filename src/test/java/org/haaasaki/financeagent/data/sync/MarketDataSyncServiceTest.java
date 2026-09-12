@@ -1,7 +1,9 @@
 package org.haaasaki.financeagent.data.sync;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
@@ -11,10 +13,13 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import org.haaasaki.financeagent.common.exception.DataIntegrityException;
 import org.haaasaki.financeagent.data.mapper.DailyBarMapper;
 import org.haaasaki.financeagent.data.mapper.InstrumentMapper;
+import org.haaasaki.financeagent.data.mapper.MarketSnapshotMapper;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.model.Instrument;
+import org.haaasaki.financeagent.data.model.InstrumentSnapshot;
 import org.haaasaki.financeagent.data.provider.QuoteProvider;
 import org.haaasaki.financeagent.data.provider.SnapshotProvider;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +41,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 @TestPropertySource(properties = {
         "spring.datasource.url=jdbc:sqlite:file:synctest?mode=memory&cache=shared",
         "spring.datasource.hikari.maximum-pool-size=1",
-        "spring.datasource.hikari.minimum-idle=1"
+        "spring.datasource.hikari.minimum-idle=1",
+        // 小样本测试绕过 5,000 条下限，单独用 3 条下限验证校验逻辑
+        "finance.sync.snapshot-min-total=3"
 })
 class MarketDataSyncServiceTest {
 
@@ -49,6 +56,8 @@ class MarketDataSyncServiceTest {
     @Autowired
     private DailyBarMapper dailyBarMapper;
     @Autowired
+    private MarketSnapshotMapper marketSnapshotMapper;
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
@@ -59,6 +68,7 @@ class MarketDataSyncServiceTest {
     @BeforeEach
     void setUp() {
         jdbcTemplate.update("DELETE FROM daily_bar");
+        jdbcTemplate.update("DELETE FROM market_snapshot");
         jdbcTemplate.update("DELETE FROM instrument");
         jdbcTemplate.update("DELETE FROM sync_log");
         instrumentMapper.upsertBatch(List.of(new Instrument(
@@ -131,6 +141,87 @@ class MarketDataSyncServiceTest {
         syncService.syncDailyIncremental();
 
         assertThat(dailyBarMapper.countByInstrument(ID)).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("快照同步：整批落库，重复执行幂等")
+    void snapshotSyncIsIdempotent() {
+        given(snapshotProvider.name()).willReturn("SINA_MARKET_CENTER");
+        given(snapshotProvider.fetchStocks()).willReturn(List.of(
+                snapshot("sh600000", "600000", "浦发银行", 9.26, 0.012),
+                snapshot("sh600519", "600519", "贵州茅台", 1685.0, 0.008)));
+        given(snapshotProvider.fetchEtfs()).willReturn(List.of(
+                snapshot("sh510300", "510300", "沪深300ETF", 3.98, 0.0075)));
+
+        SyncResult first = syncService.syncMarketSnapshots();
+        SyncResult second = syncService.syncMarketSnapshots();
+
+        assertThat(first.status()).isEqualTo("SUCCESS");
+        assertThat(first.success()).isEqualTo(3);
+        assertThat(second.status()).isEqualTo("SUCCESS");
+        assertThat(marketSnapshotMapper.count()).isEqualTo(3L);
+    }
+
+    @Test
+    @DisplayName("快照返回为空：整批拒绝，不写入且失败记录落 sync_log")
+    void snapshotSyncRejectsEmptyResponse() {
+        given(snapshotProvider.name()).willReturn("SINA_MARKET_CENTER");
+        given(snapshotProvider.fetchStocks()).willReturn(List.of());
+        given(snapshotProvider.fetchEtfs()).willReturn(List.of(
+                snapshot("sh510300", "510300", "沪深300ETF", 3.98, 0.0075)));
+
+        assertThatThrownBy(() -> syncService.syncMarketSnapshots())
+                .isInstanceOf(DataIntegrityException.class);
+
+        assertThat(marketSnapshotMapper.count()).isZero();
+        Integer failed = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM sync_log WHERE task_name = 'SYNC_MARKET_SNAPSHOT' AND status = 'FAILED'",
+                Integer.class);
+        assertThat(failed).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("快照条数低于下限：整批拒绝")
+    void snapshotSyncRejectsTooFewRows() {
+        given(snapshotProvider.name()).willReturn("SINA_MARKET_CENTER");
+        given(snapshotProvider.fetchStocks()).willReturn(List.of(
+                snapshot("sh600000", "600000", "浦发银行", 9.26, 0.012)));
+        given(snapshotProvider.fetchEtfs()).willReturn(List.of(
+                snapshot("sh510300", "510300", "沪深300ETF", 3.98, 0.0075)));
+
+        assertThatThrownBy(() -> syncService.syncMarketSnapshots())
+                .isInstanceOf(DataIntegrityException.class);
+        assertThat(marketSnapshotMapper.count()).isZero();
+    }
+
+    @Test
+    @DisplayName("指数同步：按配置落档案与日K，重复执行幂等")
+    void syncIndexesUpsertsInstrumentsAndBars() {
+        given(quoteProvider.fetchDailyBars(anyString(), any(), any()))
+                .willAnswer(invocation -> List.of(barFor(
+                        invocation.getArgument(0), LocalDate.of(2024, 9, 2), 3400.0)));
+
+        SyncResult result = syncService.syncIndexes();
+
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.total()).isEqualTo(4);
+        assertThat(instrumentMapper.findById("000001.SH")).isPresent()
+                .get().extracting(Instrument::instrumentType).isEqualTo(Instrument.TYPE_INDEX);
+        assertThat(dailyBarMapper.countByInstrument("000001.SH")).isEqualTo(1L);
+
+        syncService.syncIndexes();
+        assertThat(dailyBarMapper.countByInstrument("000001.SH")).isEqualTo(1L);
+    }
+
+    private InstrumentSnapshot snapshot(String symbol, String code, String name,
+                                        double price, double pctChg) {
+        return new InstrumentSnapshot(symbol, code, name, price, pctChg, 1000L, 10000.0,
+                10.0, 1.0, 1_000_000_000.0, 900_000_000.0, 0.01);
+    }
+
+    private DailyBar barFor(String instrumentId, LocalDate date, double close) {
+        return new DailyBar(instrumentId, date, close, close, close, close,
+                null, 100L, null, null, null, DailyBar.ADJ_QFQ, "TEST");
     }
 
     private DailyBar bar(LocalDate date, double close) {

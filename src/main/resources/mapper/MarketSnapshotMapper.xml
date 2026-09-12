@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.MarketSnapshotMapper">
+
+    <!-- record 用构造器映射：列 -> 构造参数，顺序必须与 MarketRow 头部声明一致 -->
+    <resultMap id="MarketRowMap" type="org.haaasaki.financeagent.data.model.MarketRow">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="instrument_type" javaType="java.lang.String"/>
+            <arg column="board" javaType="java.lang.String"/>
+            <arg column="last_price" javaType="java.lang.Double"/>
+            <arg column="pct_chg" javaType="java.lang.Double"/>
+            <arg column="volume" javaType="java.lang.Long"/>
+            <arg column="amount" javaType="java.lang.Double"/>
+            <arg column="turnover_rate" javaType="java.lang.Double"/>
+            <arg column="pe_ttm" javaType="java.lang.Double"/>
+            <arg column="pb" javaType="java.lang.Double"/>
+            <arg column="total_mv" javaType="java.lang.Double"/>
+            <arg column="circ_mv" javaType="java.lang.Double"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertBatch">
+        INSERT INTO market_snapshot (instrument_id, last_price, pct_chg, volume, amount,
+                                     turnover_rate, pe_ttm, pb, total_mv, circ_mv,
+                                     source, fetched_at, data_status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="s" separator=",">
+            (#{s.instrumentId}, #{s.lastPrice}, #{s.pctChg}, #{s.volume}, #{s.amount},
+            #{s.turnoverRate}, #{s.peTtm}, #{s.pb}, #{s.totalMv}, #{s.circMv},
+            #{s.source}, #{s.fetchedAt}, 'ACCEPTED',
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (instrument_id) DO UPDATE SET
+        last_price    = excluded.last_price,
+        pct_chg       = excluded.pct_chg,
+        volume        = excluded.volume,
+        amount        = excluded.amount,
+        turnover_rate = excluded.turnover_rate,
+        pe_ttm        = excluded.pe_ttm,
+        pb            = excluded.pb,
+        total_mv      = excluded.total_mv,
+        circ_mv       = excluded.circ_mv,
+        source        = excluded.source,
+        fetched_at    = excluded.fetched_at,
+        data_status   = excluded.data_status,
+        updated_at    = excluded.updated_at
+    </insert>
+
+    <select id="countByFetchedAt" resultType="long">
+        SELECT COUNT(*) FROM market_snapshot WHERE fetched_at = #{fetchedAt}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM market_snapshot
+    </select>
+
+    <select id="findMaxFetchedAt" resultType="java.lang.String">
+        SELECT MAX(fetched_at) FROM market_snapshot
+    </select>
+
+    <resultMap id="MarketSnapshotMap" type="org.haaasaki.financeagent.data.model.MarketSnapshot">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="last_price" javaType="java.lang.Double"/>
+            <arg column="pct_chg" javaType="java.lang.Double"/>
+            <arg column="volume" javaType="java.lang.Long"/>
+            <arg column="amount" javaType="java.lang.Double"/>
+            <arg column="turnover_rate" javaType="java.lang.Double"/>
+            <arg column="pe_ttm" javaType="java.lang.Double"/>
+            <arg column="pb" javaType="java.lang.Double"/>
+            <arg column="total_mv" javaType="java.lang.Double"/>
+            <arg column="circ_mv" javaType="java.lang.Double"/>
+            <arg column="source" javaType="java.lang.String"/>
+            <arg column="fetched_at" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findById" resultMap="MarketSnapshotMap">
+        SELECT instrument_id, last_price, pct_chg, volume, amount, turnover_rate,
+               pe_ttm, pb, total_mv, circ_mv, source, fetched_at
+        FROM market_snapshot
+        WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <!--
+      列表口径：股票 + ETF（指数走概览条，不进列表）。
+      LEFT JOIN 保证尚无快照的标的也可见，缺失价格由页面展示为占位符。
+      排序列与方向来自 Service 的白名单映射，不接受用户原始字符串。
+    -->
+    <sql id="listFromWhere">
+        FROM instrument i
+        LEFT JOIN market_snapshot ms ON ms.instrument_id = i.instrument_id
+        WHERE i.instrument_type IN ('STOCK', 'ETF')
+        <if test="keyword != null and keyword != ''">
+            AND (i.code LIKE '%' || #{keyword} || '%' OR i.name LIKE '%' || #{keyword} || '%')
+        </if>
+        <if test="board != null and board != ''">
+            AND i.board = #{board}
+        </if>
+        <if test="instrumentType != null and instrumentType != ''">
+            AND i.instrument_type = #{instrumentType}
+        </if>
+    </sql>
+
+    <select id="findPage" resultMap="MarketRowMap">
+        SELECT i.instrument_id, i.code, i.name, i.instrument_type, i.board,
+               ms.last_price, ms.pct_chg, ms.volume, ms.amount, ms.turnover_rate,
+               ms.pe_ttm, ms.pb, ms.total_mv, ms.circ_mv
+        <include refid="listFromWhere"/>
+        ORDER BY
+        <!-- NULL 永远排在最后，避免无快照标的占满升序首页 -->
+        (${sortColumn} IS NULL) ASC,
+        ${sortColumn} ${sortDirection},
+        i.instrument_id ASC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countRows" resultType="long">
+        SELECT COUNT(*)
+        <include refid="listFromWhere"/>
+    </select>
+
+</mapper>

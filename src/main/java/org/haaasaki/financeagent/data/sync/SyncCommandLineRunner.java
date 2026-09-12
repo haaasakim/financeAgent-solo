@@ -18,9 +18,12 @@ import org.springframework.stereotype.Component;
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.init=50 --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.init=0 --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.incremental --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.snapshot --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.indexes --spring.main.web-application-type=none"
  * </pre>
  *
  * <p>{@code --sync.init=N} 中 N 表示最多处理 N 只标的（小样本验证用），0 或省略值表示全量。
+ * {@code --sync.snapshot} 同步全市场快照，{@code --sync.indexes} 同步配置中的指数。
  *
  * <p>顺序必须晚于 {@link org.haaasaki.financeagent.data.migration.DatabaseMigrator}，
  * 否则表还没建好。
@@ -51,6 +54,14 @@ public class SyncCommandLineRunner implements ApplicationRunner {
         if (args.containsOption("sync.incremental")) {
             log.info("命令行触发：增量同步日K");
             report(syncService.syncDailyIncremental());
+        }
+        if (args.containsOption("sync.snapshot")) {
+            log.info("命令行触发：同步市场快照");
+            report(syncService.syncMarketSnapshots());
+        }
+        if (args.containsOption("sync.indexes")) {
+            log.info("命令行触发：同步指数");
+            report(syncService.syncIndexes());
         }
     }
 

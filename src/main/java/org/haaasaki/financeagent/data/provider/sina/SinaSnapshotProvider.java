@@ -33,8 +33,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  * <p>单位换算（新浪原始单位与本站契约不同，必须转换）：
  * <ul>
  *   <li>{@code mktcap} / {@code nmc}：万元 → 元（×10000）</li>
- *   <li>{@code turnoverratio}：百分数数值 → 小数（÷100）。实测 0.94246 表示 0.94%</li>
+ *   <li>{@code changepercent} / {@code turnoverratio}：百分数数值 → 小数（÷100）。
+ *       实测 {@code changepercent=-2.448} 表示 -2.448%，{@code turnoverratio=0.94246} 表示 0.94%</li>
  *   <li>{@code per}：非正数视为「未提供」，置为 null（契约规定亏损时为空，不得填 0）</li>
+ *   <li>{@code trade} ≤ 0（停牌）时，最新价、涨跌幅、成交量、成交额、换手率一律置 null，
+ *       不把「无成交」伪造成 0 成交</li>
  * </ul>
  */
 @Component
@@ -111,15 +114,22 @@ public class SinaSnapshotProvider implements SnapshotProvider {
             if (symbol == null || code == null) {
                 continue;
             }
+
+            Double lastPrice = positiveOrNull(number(row, "trade"));
+            boolean traded = lastPrice != null;
             list.add(new InstrumentSnapshot(
                     symbol,
                     code,
                     name,
+                    lastPrice,
+                    traded ? percentToRatio(number(row, "changepercent")) : null,
+                    traded ? positiveLongOrNull(row, "volume") : null,
+                    traded ? positiveOrNull(number(row, "amount")) : null,
                     positiveOrNull(number(row, "per")),
                     positiveOrNull(number(row, "pb")),
                     tenThousandToYuan(number(row, "mktcap")),
                     tenThousandToYuan(number(row, "nmc")),
-                    percentToRatio(number(row, "turnoverratio"))));
+                    traded ? positiveOrNull(percentToRatio(number(row, "turnoverratio"))) : null));
         }
         return list;
     }
@@ -146,6 +156,12 @@ public class SinaSnapshotProvider implements SnapshotProvider {
 
     private Double positiveOrNull(Double value) {
         return value == null || value <= 0 ? null : value;
+    }
+
+    /** 成交量：原始为数值字符串，非正视为无成交，置 null；四舍五入到股（整数）。 */
+    private Long positiveLongOrNull(JsonNode row, String field) {
+        Double value = number(row, field);
+        return value == null || value <= 0 ? null : Math.round(value);
     }
 
     /** 万元 → 元 */

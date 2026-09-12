@@ -32,16 +32,17 @@ class DatabaseMigratorTest {
                 "SELECT name FROM sqlite_master WHERE type = 'table'", String.class);
 
         assertThat(tables).contains(
-                "instrument", "daily_bar", "trading_calendar", "sync_log", "task", "schema_version");
+                "instrument", "daily_bar", "trading_calendar", "sync_log", "task",
+                "market_snapshot", "schema_version");
     }
 
     @Test
-    @DisplayName("V1 被记录到 schema_version，且只记录一次")
-    void recordsVersionOnce() {
+    @DisplayName("迁移版本被记录到 schema_version，且只记录一次")
+    void recordsVersionsOnce() {
         List<Integer> versions = jdbcTemplate.queryForList(
                 "SELECT version FROM schema_version", Integer.class);
 
-        assertThat(versions).containsExactly(1);
+        assertThat(versions).containsExactly(1, 2);
     }
 
     @Test
@@ -51,7 +52,7 @@ class DatabaseMigratorTest {
 
         List<Integer> versions = jdbcTemplate.queryForList(
                 "SELECT version FROM schema_version", Integer.class);
-        assertThat(versions).containsExactly(1);
+        assertThat(versions).containsExactly(1, 2);
     }
 
     @Test
