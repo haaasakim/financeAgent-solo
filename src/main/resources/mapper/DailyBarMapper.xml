@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.DailyBarMapper">
+
+    <!--
+      构造器映射，参数顺序必须与 DailyBar record 头部一致。
+
+      注意 javaType 的写法：MyBatis 的类型别名 double/long/int 指向的是包装类
+      （Double/Long/Integer），而 record 的组件是原始类型。用别名会报
+      NoSuchMethodException，因此原始类型必须用下划线别名 _double / _long / _int。
+    -->
+    <resultMap id="DailyBarMap" type="org.haaasaki.financeagent.data.model.DailyBar">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <idArg column="trade_date" javaType="java.time.LocalDate"/>
+            <arg column="open" javaType="_double"/>
+            <arg column="high" javaType="_double"/>
+            <arg column="low" javaType="_double"/>
+            <arg column="close" javaType="_double"/>
+            <arg column="pre_close" javaType="java.lang.Double"/>
+            <arg column="volume" javaType="_long"/>
+            <arg column="amount" javaType="java.lang.Double"/>
+            <arg column="pct_chg" javaType="java.lang.Double"/>
+            <arg column="turnover_rate" javaType="java.lang.Double"/>
+            <arg column="adj_type" javaType="java.lang.String"/>
+            <arg column="source" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="DailyCloseMap" type="org.haaasaki.financeagent.data.model.DailyClose">
+        <constructor>
+            <idArg column="trade_date" javaType="java.time.LocalDate"/>
+            <arg column="close" javaType="_double"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        instrument_id, trade_date, open, high, low, close, pre_close, volume,
+        amount, pct_chg, turnover_rate, adj_type, source
+    </sql>
+
+    <!--
+      幂等写入 + 覆写能力：
+      1) 同步任务重复执行不产生重复行
+      2) 除权重拉时覆盖旧复权基准下的历史价格
+    -->
+    <insert id="upsertBatch">
+        INSERT INTO daily_bar (instrument_id, trade_date, open, high, low, close, pre_close,
+                               volume, amount, pct_chg, turnover_rate, adj_type, source,
+                               fetched_at, data_status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.instrumentId}, #{it.tradeDate}, #{it.open}, #{it.high}, #{it.low}, #{it.close},
+            #{it.preClose}, #{it.volume}, #{it.amount}, #{it.pctChg}, #{it.turnoverRate},
+            #{it.adjType}, #{it.source},
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            'ACCEPTED',
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (instrument_id, trade_date) DO UPDATE SET
+        open          = excluded.open,
+        high          = excluded.high,
+        low           = excluded.low,
+        close         = excluded.close,
+        pre_close     = excluded.pre_close,
+        volume        = excluded.volume,
+        amount        = excluded.amount,
+        pct_chg       = excluded.pct_chg,
+        turnover_rate = excluded.turnover_rate,
+        adj_type      = excluded.adj_type,
+        source        = excluded.source,
+        fetched_at    = excluded.fetched_at,
+        data_status   = excluded.data_status,
+        updated_at    = excluded.updated_at
+    </insert>
+
+    <select id="findRange" resultMap="DailyBarMap">
+        SELECT <include refid="columns"/>
+        FROM daily_bar
+        WHERE instrument_id = #{instrumentId}
+          AND trade_date BETWEEN #{from} AND #{to}
+        ORDER BY trade_date
+    </select>
+
+    <select id="findCloseList" resultMap="DailyCloseMap">
+        SELECT trade_date, close
+        FROM daily_bar
+        WHERE instrument_id = #{instrumentId}
+          AND trade_date BETWEEN #{from} AND #{to}
+        ORDER BY trade_date
+    </select>
+
+    <select id="findMaxTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM daily_bar WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="findMinTradeDate" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM daily_bar WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="countByInstrument" resultType="long">
+        SELECT COUNT(*) FROM daily_bar WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM daily_bar
+    </select>
+
+    <select id="countDistinctInstruments" resultType="long">
+        SELECT COUNT(DISTINCT instrument_id) FROM daily_bar
+    </select>
+
+    <delete id="deleteByInstrumentId">
+        DELETE FROM daily_bar WHERE instrument_id = #{instrumentId}
+    </delete>
+
+</mapper>

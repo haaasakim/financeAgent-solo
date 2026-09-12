@@ -1,0 +1,63 @@
+spring:
+  application:
+    name: financeAgent
+
+  datasource:
+    url: jdbc:sqlite:./data/finance.db
+    driver-class-name: org.sqlite.JDBC
+    hikari:
+      pool-name: finance-pool
+      maximum-pool-size: 5
+      # sqlite-jdbc 的部分版本 isValid() 实现不完整，显式给出探测语句更稳
+      connection-test-query: SELECT 1
+      connection-init-sql: "PRAGMA busy_timeout=5000"
+
+  thymeleaf:
+    # 开发期关闭模板缓存，改模板后刷新即生效；模板目录已存在
+    cache: false
+
+  web:
+    resources:
+      cache:
+        period: 0
+
+server:
+  port: 8080
+
+finance:
+  migration:
+    locations: classpath:db/migration
+
+  providers:
+    http:
+      connect-timeout-seconds: 10
+      read-timeout-seconds: 15
+      max-retry: 3
+      # 实测腾讯 3.3 QPS 连发 30 次零失败，默认留出余量取 5 QPS
+      rate-limit-qps: 5
+    quote:
+      order: [tencent]
+    snapshot:
+      order: [sina]
+
+  sync:
+    history-years: 10
+    # 腾讯单次上限 800 条（约 3.2 年），按 3 年一段切分以保证不触发降级
+    segment-years: 3
+    batch-size: 500
+
+# 持久层使用 MyBatis：接口在 data/mapper，SQL 在 resources/mapper/*.xml。
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  # 全局注册自定义 TypeHandler（SQLite 的日期以 ISO 文本存取）
+  type-handlers-package: org.haaasaki.financeagent.data.mybatis
+  configuration:
+    # 表列名为下划线风格，映射到 record 组件的驼峰命名
+    map-underscore-to-camel-case: true
+
+# 日志的 appender、滚动策略与格式由 src/main/resources/logback-spring.xml 管理。
+# 这里只保留级别开关——改级别比改 XML 方便。
+logging:
+  level:
+    root: INFO
+    org.haaasaki.financeagent: INFO

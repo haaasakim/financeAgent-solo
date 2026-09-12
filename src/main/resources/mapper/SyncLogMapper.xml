@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.SyncLogMapper">
+
+    <!--
+      时间列以字符串承载并直接展示，不做日期类型转换。
+      原始类型（long/int）必须用下划线别名，详见 DailyBarMapper.xml 中的说明。
+    -->
+    <resultMap id="SyncLogMap" type="org.haaasaki.financeagent.data.model.SyncLogEntry">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="task_name" javaType="java.lang.String"/>
+            <arg column="provider" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="total_count" javaType="_int"/>
+            <arg column="success_count" javaType="_int"/>
+            <arg column="fail_count" javaType="_int"/>
+            <arg column="message" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.lang.String"/>
+            <arg column="finished_at" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        id, task_name, provider, status, total_count, success_count, fail_count,
+        message, started_at, finished_at
+    </sql>
+
+    <insert id="insert">
+        INSERT INTO sync_log (task_name, provider, status, total_count, success_count, fail_count,
+                              message, started_at, finished_at)
+        VALUES (#{taskName}, #{provider}, #{status}, #{totalCount}, #{successCount}, #{failCount},
+                #{message}, #{startedAt},
+                strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+    </insert>
+
+    <select id="findRecent" resultMap="SyncLogMap">
+        SELECT <include refid="columns"/>
+        FROM sync_log
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="findLast" resultMap="SyncLogMap">
+        SELECT <include refid="columns"/>
+        FROM sync_log
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+</mapper>

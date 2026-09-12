@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.DataStatisticsMapper">
+
+    <!-- 原始类型用下划线别名，详见 DailyBarMapper.xml 中的说明 -->
+    <resultMap id="SyncLogMap" type="org.haaasaki.financeagent.data.model.SyncLogEntry">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="task_name" javaType="java.lang.String"/>
+            <arg column="provider" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="total_count" javaType="_int"/>
+            <arg column="success_count" javaType="_int"/>
+            <arg column="fail_count" javaType="_int"/>
+            <arg column="message" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.lang.String"/>
+            <arg column="finished_at" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="countInstruments" resultType="long">
+        SELECT COUNT(*) FROM instrument
+    </select>
+
+    <select id="countInstrumentsByType" resultType="long">
+        SELECT COUNT(*) FROM instrument WHERE instrument_type = #{instrumentType}
+    </select>
+
+    <select id="countDailyBars" resultType="long">
+        SELECT COUNT(*) FROM daily_bar
+    </select>
+
+    <select id="countCoveredInstruments" resultType="long">
+        SELECT COUNT(DISTINCT instrument_id) FROM daily_bar
+    </select>
+
+    <select id="minTradeDate" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM daily_bar
+    </select>
+
+    <select id="maxTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM daily_bar
+    </select>
+
+    <select id="findLastSync" resultMap="SyncLogMap">
+        SELECT id, task_name, provider, status, total_count, success_count, fail_count,
+               message, started_at, finished_at
+        FROM sync_log
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+</mapper>

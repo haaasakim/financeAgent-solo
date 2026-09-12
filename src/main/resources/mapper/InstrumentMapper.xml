@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.InstrumentMapper">
+
+    <!--
+      record 用构造器映射：列 -> 构造参数，顺序必须与 Instrument 头部声明一致。
+      日期列用全局注册的 LocalDateTypeHandler，无需逐个指定。
+    -->
+    <resultMap id="InstrumentMap" type="org.haaasaki.financeagent.data.model.Instrument">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="instrument_type" javaType="java.lang.String"/>
+            <arg column="exchange" javaType="java.lang.String"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="board" javaType="java.lang.String"/>
+            <arg column="currency" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="listed_at" javaType="java.time.LocalDate"/>
+            <arg column="delisted_at" javaType="java.time.LocalDate"/>
+            <arg column="status" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="columns">
+        instrument_id, instrument_type, exchange, code, name, board,
+        currency, timezone, listed_at, delisted_at, status
+    </sql>
+
+    <insert id="upsertBatch">
+        INSERT INTO instrument (instrument_id, instrument_type, exchange, code, name, board,
+                                currency, timezone, listed_at, delisted_at, status,
+                                created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.instrumentId}, #{it.instrumentType}, #{it.exchange}, #{it.code}, #{it.name},
+            #{it.board}, #{it.currency}, #{it.timezone},
+            #{it.listedAt}, #{it.delistedAt}, #{it.status},
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (instrument_id) DO UPDATE SET
+        <!-- listed_at 用 COALESCE 保留已有值：它可能已由日K首日回填，不能被 null 覆盖 -->
+        name        = excluded.name,
+        board       = excluded.board,
+        status      = excluded.status,
+        listed_at   = COALESCE(instrument.listed_at, excluded.listed_at),
+        delisted_at = excluded.delisted_at,
+        updated_at  = excluded.updated_at
+    </insert>
+
+    <select id="findById" resultMap="InstrumentMap">
+        SELECT <include refid="columns"/>
+        FROM instrument
+        WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="findAllListed" resultMap="InstrumentMap">
+        SELECT <include refid="columns"/>
+        FROM instrument
+        WHERE status &lt;&gt; 'DELISTED'
+        ORDER BY instrument_id
+    </select>
+
+    <select id="findByType" resultMap="InstrumentMap">
+        SELECT <include refid="columns"/>
+        FROM instrument
+        WHERE instrument_type = #{instrumentType}
+          AND status &lt;&gt; 'DELISTED'
+        ORDER BY instrument_id
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM instrument
+    </select>
+
+    <update id="updateListedAt">
+        UPDATE instrument
+        SET listed_at  = #{listedAt},
+            updated_at = strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime')
+        WHERE instrument_id = #{instrumentId}
+          AND listed_at IS NULL
+    </update>
+
+</mapper>
