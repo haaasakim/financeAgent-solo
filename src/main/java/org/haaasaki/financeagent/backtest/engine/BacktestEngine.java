@@ -380,6 +380,7 @@ public class BacktestEngine {
 
     private boolean crossesPeriod(LocalDate current, LocalDate next, RebalanceFrequency frequency) {
         return switch (frequency) {
+            case DAILY -> true;
             case WEEKLY -> weekStart(current).isBefore(weekStart(next));
             case MONTHLY -> YearMonth.from(current).isBefore(YearMonth.from(next));
             case QUARTERLY -> quarter(current) != quarter(next);

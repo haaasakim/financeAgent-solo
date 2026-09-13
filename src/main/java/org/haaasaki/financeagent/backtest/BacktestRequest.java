@@ -9,7 +9,7 @@ import java.time.LocalDate;
  * @param strategyId       策略 id
  * @param startDate        开始交易日
  * @param endDate          结束交易日
- * @param frequency        调仓频率：WEEKLY / MONTHLY / QUARTERLY
+ * @param frequency        调仓频率：DAILY / WEEKLY / MONTHLY / QUARTERLY
  * @param topN             目标持仓数
  * @param initialCapital   初始资金，元
  * @param commissionRatePct 佣金率，百分数（0.03 表示万 3）

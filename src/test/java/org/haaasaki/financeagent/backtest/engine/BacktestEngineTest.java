@@ -145,6 +145,29 @@ class BacktestEngineTest {
     }
 
     @Test
+    @DisplayName("每日调仓：每个交易日收盘都是信号日，次日开盘即调仓")
+    void dailyRebalanceSignalsEveryTradingDay() {
+        factorDailyMapper.upsertBatch(List.of(factor(A, LocalDate.of(2026, 8, 24), 0.10)));
+
+        BacktestResult result = backtestEngine.run(1, params(RebalanceFrequency.DAILY, 1,
+                new BigDecimal("100000")), dsl(), null);
+
+        // 08-24 信号买入 → 08-25 开盘成交；08-25 截面无因子行 → 目标为空，当日信号卖出 → 08-26 成交
+        assertThat(result.trades()).hasSize(2);
+        BacktestTrade buy = result.trades().get(0);
+        assertThat(buy.side()).isEqualTo(BacktestTrade.SIDE_BUY);
+        assertThat(buy.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(buy.signalDate()).isEqualTo(LocalDate.of(2026, 8, 24));
+        assertThat(buy.filledDate()).isEqualTo(LocalDate.of(2026, 8, 25));
+
+        BacktestTrade sell = result.trades().get(1);
+        assertThat(sell.side()).isEqualTo(BacktestTrade.SIDE_SELL);
+        assertThat(sell.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(sell.signalDate()).isEqualTo(LocalDate.of(2026, 8, 25));
+        assertThat(sell.filledDate()).isEqualTo(LocalDate.of(2026, 8, 26));
+    }
+
+    @Test
     @DisplayName("一字涨停不可买入：订单延后到下一交易日成交")
     void defersBuyOnOneWordLimitUp() {
         LocalDate execution = LocalDate.of(2026, 9, 1);
