@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -165,6 +167,19 @@ class TencentQuoteProviderTest {
                 "600000.SH", LocalDate.of(2024, 9, 1), LocalDate.of(2024, 9, 30));
 
         assertThat(bars).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("记住成功域名：后续请求不再先撞失败源")
+    void sticksToWorkingHost() {
+        given(httpClient.get(startsWith(PRIMARY), any()))
+                .willThrow(new DataSyncException("HTTP 501 - WAF"));
+        given(httpClient.get(startsWith(FALLBACK), any())).willReturn(SAMPLE);
+
+        provider.fetchDailyBars("600000.SH", LocalDate.of(2024, 9, 1), LocalDate.of(2024, 9, 30));
+        provider.fetchDailyBars("600000.SH", LocalDate.of(2024, 9, 1), LocalDate.of(2024, 9, 30));
+
+        verify(httpClient, times(1)).get(startsWith(PRIMARY), any());
     }
 
     @Test

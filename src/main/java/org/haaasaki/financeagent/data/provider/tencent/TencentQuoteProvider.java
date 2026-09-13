@@ -63,6 +63,12 @@ public class TencentQuoteProvider implements QuoteProvider {
     private final int segmentYears;
     private final QuoteProperties quoteProperties;
 
+    /**
+     * 最近一次成功的域名（粘性）。腾讯 WAF 会间歇性拦截某个域名，
+     * 记住可用域名可避免每个日期分段都先撞击失败源、白耗退避时间。
+     */
+    private volatile String preferredHost;
+
     public TencentQuoteProvider(
             ThrottledHttpClient httpClient,
             ObjectMapper objectMapper,
@@ -72,6 +78,7 @@ public class TencentQuoteProvider implements QuoteProvider {
         this.objectMapper = objectMapper;
         this.segmentYears = Math.max(1, segmentYears);
         this.quoteProperties = quoteProperties;
+        this.preferredHost = quoteProperties.tencentKlineHosts().get(0);
     }
 
     @Override
@@ -107,11 +114,12 @@ public class TencentQuoteProvider implements QuoteProvider {
 
     private List<DailyBar> fetchSegment(String instrumentId, String symbol, LocalDate start, LocalDate end) {
         DataSyncException lastError = null;
-        for (String host : quoteProperties.tencentKlineHosts()) {
+        for (String host : hostsByPreference()) {
             String url = host + KLINE_PATH + "?param=" + symbol + ",day," + start + "," + end
                     + "," + MAX_BARS_PER_REQUEST + ",qfq";
             try {
                 String body = httpClient.get(url, StandardCharsets.UTF_8);
+                preferredHost = host;
                 return parse(instrumentId, symbol, start, end, body);
             } catch (DataSyncException e) {
                 lastError = e;
@@ -119,6 +127,22 @@ public class TencentQuoteProvider implements QuoteProvider {
             }
         }
         throw lastError != null ? lastError : new DataSyncException("无可用腾讯日K源");
+    }
+
+    /** 上次成功的域名排最前，其余按配置顺序。 */
+    private List<String> hostsByPreference() {
+        List<String> configured = quoteProperties.tencentKlineHosts();
+        String preferred = preferredHost;
+        List<String> ordered = new ArrayList<>(configured.size());
+        if (preferred != null && configured.contains(preferred)) {
+            ordered.add(preferred);
+        }
+        for (String host : configured) {
+            if (!host.equals(preferred)) {
+                ordered.add(host);
+            }
+        }
+        return ordered;
     }
 
     private List<DailyBar> parse(String instrumentId, String symbol,
