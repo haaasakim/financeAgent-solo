@@ -33,7 +33,7 @@ class DatabaseMigratorTest {
 
         assertThat(tables).contains(
                 "instrument", "daily_bar", "trading_calendar", "sync_log", "task",
-                "market_snapshot", "factor_daily", "schema_version");
+                "market_snapshot", "factor_daily", "strategy", "schema_version");
     }
 
     @Test
@@ -42,7 +42,7 @@ class DatabaseMigratorTest {
         List<Integer> versions = jdbcTemplate.queryForList(
                 "SELECT version FROM schema_version", Integer.class);
 
-        assertThat(versions).containsExactly(1, 2, 3);
+        assertThat(versions).containsExactly(1, 2, 3, 4);
     }
 
     @Test
@@ -52,7 +52,7 @@ class DatabaseMigratorTest {
 
         List<Integer> versions = jdbcTemplate.queryForList(
                 "SELECT version FROM schema_version", Integer.class);
-        assertThat(versions).containsExactly(1, 2, 3);
+        assertThat(versions).containsExactly(1, 2, 3, 4);
     }
 
     @Test

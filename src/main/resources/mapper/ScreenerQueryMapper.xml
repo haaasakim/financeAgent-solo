@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.ScreenerQueryMapper">
+
+    <!-- 选股结果投影：估值来自快照，技术因子取 factor_daily 最新一行；评分由服务层计算 -->
+    <resultMap id="ScreenerRowMap" type="org.haaasaki.financeagent.data.model.ScreenerRow">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="last_price" javaType="java.lang.Double"/>
+            <arg column="pct_chg" javaType="java.lang.Double"/>
+            <arg column="pe_ttm" javaType="java.lang.Double"/>
+            <arg column="pb" javaType="java.lang.Double"/>
+            <arg column="return_20" javaType="java.lang.Double"/>
+            <arg column="score" javaType="java.lang.Double"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="FactorValueMap" type="org.haaasaki.financeagent.data.model.FactorValue">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="factor_value" javaType="java.lang.Double"/>
+        </constructor>
+    </resultMap>
+
+    <!--
+      LEFT JOIN 保证无快照 / 无因子的标的也能在纯基础条件下出现；
+      技术条件引用 f.* 时 NULL 比较自然为假，等价于“不满足技术条件”。
+    -->
+    <sql id="baseFrom">
+        FROM instrument i
+        LEFT JOIN market_snapshot ms ON ms.instrument_id = i.instrument_id
+        LEFT JOIN factor_daily f ON f.instrument_id = i.instrument_id
+            AND f.trade_date = (SELECT MAX(f2.trade_date) FROM factor_daily f2
+                                WHERE f2.instrument_id = i.instrument_id)
+        WHERE i.instrument_type IN ('STOCK', 'ETF')
+    </sql>
+
+    <!--
+      条件表达式与运算符来自服务端白名单（FactorRegistry + CompareOp），
+      不由用户字符串拼接；阈值走 #{} 参数绑定。
+    -->
+    <sql id="conditionFilter">
+        <if test="all != null and all.size() > 0">
+            <foreach collection="all" item="c">
+                AND (${c.expression} ${c.sqlOp} #{c.value})
+            </foreach>
+        </if>
+        <if test="any != null and any.size() > 0">
+            AND (
+            <foreach collection="any" item="c" separator=" OR ">
+                (${c.expression} ${c.sqlOp} #{c.value})
+            </foreach>
+            )
+        </if>
+        <if test="excludes != null and excludes.size() > 0">
+            AND NOT (
+            <foreach collection="excludes" item="c" separator=" AND ">
+                (${c.expression} ${c.sqlOp} #{c.value})
+            </foreach>
+            )
+        </if>
+    </sql>
+
+    <select id="countCandidates" resultType="long">
+        SELECT COUNT(*)
+        <include refid="baseFrom"/>
+        <include refid="conditionFilter"/>
+    </select>
+
+    <!--
+      命中明细不分页：命中数受 MAX_MATCHES=5,000 限制，服务层评分排序后分页。
+      score 由服务层计算，投影恒为 NULL（MyBatis 构造器映射需列存在，见 BACKEND_GUIDE）。
+    -->
+    <select id="findAllCandidates" resultMap="ScreenerRowMap">
+        SELECT i.instrument_id, i.code, i.name,
+               ms.last_price, ms.pct_chg, ms.pe_ttm, ms.pb,
+               f.return_20, NULL AS score
+        <include refid="baseFrom"/>
+        <include refid="conditionFilter"/>
+        ORDER BY i.instrument_id
+    </select>
+
+    <!-- expression 只能来自 FactorRegistry（服务端白名单），不接受用户字符串 -->
+    <select id="findFactorValues" resultMap="FactorValueMap">
+        SELECT i.instrument_id, (${expression}) AS factor_value
+        <include refid="baseFrom"/>
+    </select>
+
+</mapper>

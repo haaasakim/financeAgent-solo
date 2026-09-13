@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.StrategyMapper">
+
+    <resultMap id="StrategyMap" type="org.haaasaki.financeagent.data.model.Strategy">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="dsl" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsert">
+        INSERT INTO strategy (name, description, dsl, created_at, updated_at)
+        VALUES (#{name}, #{description}, #{dsl},
+                strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+                strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        ON CONFLICT (name) DO UPDATE SET
+        description = excluded.description,
+        dsl         = excluded.dsl,
+        updated_at  = excluded.updated_at
+    </insert>
+
+    <select id="findAll" resultMap="StrategyMap">
+        SELECT id, name, description, dsl
+        FROM strategy
+        ORDER BY updated_at DESC, id DESC
+    </select>
+
+    <select id="findById" resultMap="StrategyMap">
+        SELECT id, name, description, dsl
+        FROM strategy
+        WHERE id = #{id}
+    </select>
+
+    <delete id="deleteById">
+        DELETE FROM strategy WHERE id = #{id}
+    </delete>
+
+</mapper>

@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/skeleton :: head('选股')}"></head>
+<body>
+
+<header th:replace="~{layout/skeleton :: nav('screener')}"></header>
+
+<main class="wrap"
+      x-data="screenerApp(window.__SCREENER_FACTORS__, window.__SCREENER_INITIAL__)">
+
+    <script th:inline="javascript">
+        window.__SCREENER_FACTORS__ = JSON.parse(/*[[${availableFactorsJson}]]*/ '[]');
+        window.__SCREENER_INITIAL__ = JSON.parse(/*[[${initialDslJson}]]*/ '{"all":[],"any":[],"not":[]}');
+    </script>
+
+    <div class="grid-2">
+
+        <!-- 左栏：因子目录 / 预设模板 / 已保存策略 -->
+        <aside>
+            <div class="card" style="margin-bottom:16px">
+                <div class="card-hd">
+                    <div class="card-title">因子目录</div>
+                </div>
+                <div class="card-sub" style="margin-bottom:10px">点击因子加入「全部满足」</div>
+                <div class="factor-group" th:each="group : ${factorGroups}">
+                    <h4 th:text="${group.name}">基础</h4>
+                    <div class="factor">
+                        <span th:each="f : ${group.factors}" th:if="${f.available}"
+                              th:text="${f.label}"
+                              th:attr="data-key=${f.key}"
+                              @click="addCondition($el.dataset.key)"
+                              title="加入全部满足"></span>
+                        <span th:each="f : ${group.factors}" th:if="${!f.available}"
+                              th:text="${f.label}" class="disabled"
+                              title="待财报数据源，暂不可用"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom:16px">
+                <div class="card-hd">
+                    <div class="card-title">预设策略</div>
+                </div>
+                <a class="tpl" th:each="t : ${presets}"
+                   th:href="@{/screener(template=${t.key})}">
+                    <div class="tpl-name" th:text="${t.name}">低估值价值</div>
+                    <div class="tpl-desc" th:text="${t.description}"></div>
+                </a>
+            </div>
+
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-title">已保存策略</div>
+                </div>
+                <div th:replace="~{fragments/screener-strategies :: list}"></div>
+            </div>
+        </aside>
+
+        <!-- 右栏：条件卡片 / 执行 / 结果 -->
+        <div>
+            <div class="card" style="margin-bottom:16px">
+                <div class="card-hd">
+                    <div class="card-title">筛选条件</div>
+                    <div class="card-sub" th:if="${sourceLabel != null}" th:text="${sourceLabel}"></div>
+                </div>
+
+                <template x-for="section in sections" :key="section.key">
+                    <div class="logic">
+                        <div class="logic-hd">
+                            <span class="logic-tag" :class="section.tag" x-text="section.title"></span>
+                            <span class="logic-note" x-text="section.note"></span>
+                        </div>
+
+                        <template x-for="(cond, i) in section.conditions" :key="section.key + '-' + i">
+                            <div class="rule">
+                                <select x-model="cond.factor" @change="onFactorChange(section, i)">
+                                    <option th:each="f : ${availableFactors}"
+                                            th:value="${f.key}" th:text="${f.label}"></option>
+                                </select>
+
+                                <!-- 布尔因子：是 / 否 -->
+                                <template x-if="kindOf(cond.factor) === 'BOOLEAN'">
+                                    <span class="rule-inline">
+                                        <select x-model.number="cond.value">
+                                            <option :value="1">是</option>
+                                            <option :value="0">否</option>
+                                        </select>
+                                    </span>
+                                </template>
+
+                                <!-- 数值因子：运算符 + 阈值 + 单位 -->
+                                <template x-if="kindOf(cond.factor) !== 'BOOLEAN'">
+                                    <span class="rule-inline">
+                                        <select x-model="cond.op" class="rule-op">
+                                            <option value="gt">&gt;</option>
+                                            <option value="gte">≥</option>
+                                            <option value="lt">&lt;</option>
+                                            <option value="lte">≤</option>
+                                            <option value="eq">=</option>
+                                        </select>
+                                        <input type="number" step="any" x-model.number="cond.value">
+                                        <span class="unit" x-text="unitOf(cond.factor)"></span>
+                                    </span>
+                                </template>
+
+                                <span class="rule-del" @click="section.conditions.splice(i, 1)"
+                                      title="删除条件">×</span>
+                            </div>
+                        </template>
+
+                        <div class="rule-empty" x-show="section.conditions.length === 0">未设置条件</div>
+                    </div>
+                </template>
+
+                <div class="toolbar" style="margin-top:12px">
+                    <form id="screener-form" hx-post="/fragments/screener/results"
+                          hx-target="#screener-results" hx-swap="outerHTML"
+                          hx-indicator="#screener-loading">
+                        <input type="hidden" name="dsl" :value="dslJson()">
+                        <button class="btn btn-primary" type="submit">执行选股</button>
+                    </form>
+                    <button class="btn" type="button" disabled title="M5 开发中">拿去回测</button>
+                    <form hx-post="/fragments/screener/strategies"
+                          hx-target="#strategy-list" hx-swap="outerHTML"
+                          hx-indicator="#strategy-loading">
+                        <input type="hidden" name="dsl" :value="dslJson()">
+                        <input type="text" name="name" placeholder="策略名" maxlength="50">
+                        <button class="btn" type="submit">保存为策略</button>
+                    </form>
+                    <span id="screener-loading" class="card-sub htmx-indicator">计算中…</span>
+                    <span id="strategy-loading" class="card-sub htmx-indicator">保存中…</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-hd">
+                    <div class="card-title">选股结果</div>
+                </div>
+                <div id="screener-results">
+                    <div class="empty">设置条件后点击「执行选股」</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<div th:replace="~{layout/skeleton :: scripts}"></div>
+</body>
+</html>

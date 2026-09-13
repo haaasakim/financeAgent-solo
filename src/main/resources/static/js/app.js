@@ -157,3 +157,81 @@
     charts.kline = chart;
   }
 })();
+
+/*
+  选股页 Alpine 组件：条件卡片的状态管理与 DSL 编译。
+  - factors：服务端下发的可用因子（key/label/kind/unit）
+  - initial：初始条件树 {all, any, not}
+  布尔因子固定 eq，值 1=是 / 0=否；数值因子由用户选择运算符与阈值。
+*/
+function screenerApp(factors, initial) {
+  'use strict';
+
+  var factorList = factors || [];
+  var factorMap = {};
+  factorList.forEach(function (f) {
+    factorMap[f.key] = f;
+  });
+  var start = initial || {};
+
+  function hydrate(list) {
+    return (list || []).map(function (c) {
+      var kind = (factorMap[c.factor] || {}).kind || 'NUMBER';
+      return {
+        factor: c.factor,
+        op: kind === 'BOOLEAN' ? 'eq' : (c.op || 'gte'),
+        value: c.value == null ? (kind === 'BOOLEAN' ? 1 : 0) : c.value
+      };
+    });
+  }
+
+  function compile(list) {
+    return list.map(function (c) {
+      var kind = (factorMap[c.factor] || {}).kind || 'NUMBER';
+      return {
+        factor: c.factor,
+        op: kind === 'BOOLEAN' ? 'eq' : c.op,
+        value: Number(c.value)
+      };
+    });
+  }
+
+  return {
+    sections: [
+      { key: 'ALL', tag: 'tag-all', title: '全部满足', note: '所有条件同时成立', conditions: hydrate(start.all) },
+      { key: 'ANY', tag: 'tag-any', title: '任一满足', note: '至少一个条件成立', conditions: hydrate(start.any) },
+      { key: 'NOT', tag: 'tag-not', title: '排除', note: '排除同时满足以下全部条件的标的', conditions: hydrate(start.not) }
+    ],
+
+    kindOf: function (key) {
+      return (factorMap[key] || {}).kind || 'NUMBER';
+    },
+    unitOf: function (key) {
+      return (factorMap[key] || {}).unit || '';
+    },
+    addCondition: function (key) {
+      if (!key) {
+        return;
+      }
+      var kind = this.kindOf(key);
+      this.sections[0].conditions.push({
+        factor: key,
+        op: kind === 'BOOLEAN' ? 'eq' : 'gte',
+        value: kind === 'BOOLEAN' ? 1 : 0
+      });
+    },
+    onFactorChange: function (section, index) {
+      var condition = section.conditions[index];
+      var kind = this.kindOf(condition.factor);
+      condition.op = kind === 'BOOLEAN' ? 'eq' : 'gte';
+      condition.value = kind === 'BOOLEAN' ? 1 : 0;
+    },
+    dslJson: function () {
+      return JSON.stringify({
+        all: compile(this.sections[0].conditions),
+        any: compile(this.sections[1].conditions),
+        not: compile(this.sections[2].conditions)
+      });
+    }
+  };
+}

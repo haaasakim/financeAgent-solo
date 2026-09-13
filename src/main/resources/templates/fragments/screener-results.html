@@ -1,0 +1,72 @@
+<!--
+  选股结果片段：由 POST /fragments/screener/results 返回，outerHTML 替换 #screener-results。
+  分页按钮重新 POST 本片段，dsl 由 #screener-form 的隐藏字段携带。
+-->
+<div id="screener-results" th:fragment="results" xmlns:th="http://www.thymeleaf.org">
+    <div class="notice" th:if="${errorMessage != null}" th:text="${errorMessage}">条件无效</div>
+
+    <div th:if="${errorMessage == null and result != null}">
+        <div th:if="${result.exceeded()}" class="notice"
+             th:text="|匹配 ${result.total} 条，超过 5,000 条上限，仅展示计数，请收紧条件|">匹配过多</div>
+
+        <div th:if="${!result.exceeded()}">
+        <div class="pager" style="padding-top:0;padding-bottom:10px">
+            <span th:text="|共 ${result.total} 条 · 显示第 ${result.from()} - ${result.to()} 条|">--</span>
+            <div class="pager-btns">
+                <button class="btn btn-sm" th:disabled="${!result.hasPrev()}"
+                        th:attr="hx-post=@{/fragments/screener/results(page=${result.page - 1})}"
+                        hx-include="#screener-form" hx-target="#screener-results"
+                        hx-swap="outerHTML" hx-indicator="#screener-loading">上一页</button>
+                <span class="card-sub" th:text="|第 ${result.page} / ${result.totalPages()} 页|">--</span>
+                <button class="btn btn-sm" th:disabled="${!result.hasNext()}"
+                        th:attr="hx-post=@{/fragments/screener/results(page=${result.page + 1})}"
+                        hx-include="#screener-form" hx-target="#screener-results"
+                        hx-swap="outerHTML" hx-indicator="#screener-loading">下一页</button>
+            </div>
+        </div>
+
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th class="num">评分</th>
+                    <th class="num">最新价</th>
+                    <th class="num">涨跌幅</th>
+                    <th class="num">PE-TTM</th>
+                    <th class="num">PB</th>
+                    <th class="num">20日收益</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:if="${#lists.isEmpty(result.rows)}">
+                    <td colspan="8" class="empty">没有符合条件的标的，试试放宽条件</td>
+                </tr>
+                <tr th:each="row : ${result.rows}">
+                    <td class="code" th:text="${row.code}">000001</td>
+                    <td>
+                        <a class="name" th:href="@{/market/stock/{id}(id=${row.instrumentId})}"
+                           th:text="${row.name}">平安银行</a>
+                    </td>
+                    <td class="num score"
+                        th:text="${row.score != null} ? ${#numbers.formatDecimal(row.score, 1, 1)} : '--'">--</td>
+                    <td class="num"
+                        th:text="${row.lastPrice != null} ? ${#numbers.formatDecimal(row.lastPrice, 1, 2)} : '--'">--</td>
+                    <td class="num"
+                        th:classappend="${row.pctChg != null} ? (${row.pctChg > 0} ? 'up' : (${row.pctChg < 0} ? 'down' : 'flat')) : ''"
+                        th:text="${row.pctChg != null} ? ${#numbers.formatDecimal(row.pctChg * 100, 1, 2) + '%'} : '--'">--</td>
+                    <td class="num"
+                        th:text="${row.peTtm != null} ? ${#numbers.formatDecimal(row.peTtm, 1, 2)} : '--'">--</td>
+                    <td class="num"
+                        th:text="${row.pb != null} ? ${#numbers.formatDecimal(row.pb, 1, 2)} : '--'">--</td>
+                    <td class="num"
+                        th:classappend="${row.return20 != null} ? (${row.return20 > 0} ? 'up' : (${row.return20 < 0} ? 'down' : 'flat')) : ''"
+                        th:text="${row.return20 != null} ? ${#numbers.formatDecimal(row.return20 * 100, 1, 2) + '%'} : '--'">--</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        </div>
+    </div>
+</div>

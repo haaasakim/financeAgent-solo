@@ -21,8 +21,8 @@
         <nav class="tabs">
             <a class="tab" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/}">总览</a>
             <a class="tab" th:classappend="${active == 'market'} ? 'active'" th:href="@{/market}">市场</a>
-            <span class="tab disabled" title="M3 开发中">选股</span>
-            <span class="tab disabled" title="M4 开发中">回测</span>
+            <a class="tab" th:classappend="${active == 'screener'} ? 'active'" th:href="@{/screener}">选股</a>
+            <span class="tab disabled" title="M5 开发中">回测</span>
         </nav>
     </div>
 </header>
