@@ -210,6 +210,28 @@ class BacktestServiceTest {
     }
 
     @Test
+    @DisplayName("出场风控参数越界：止损 >50% 与时间止损 >250 均拒绝")
+    void rejectsOutOfRangeStopParams() {
+        long id = technicalStrategyId();
+
+        BacktestRequest badStop = new BacktestRequest(id, LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 9, 11), "MONTHLY", 20, new BigDecimal("1000000"),
+                new BigDecimal("0.03"), new BigDecimal("0.05"), new BigDecimal("5"),
+                new BigDecimal("51"), 0, "000300.SH");
+        assertThatThrownBy(() -> backtestService.createTask(badStop))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("止损");
+
+        BacktestRequest badTime = new BacktestRequest(id, LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 9, 11), "MONTHLY", 20, new BigDecimal("1000000"),
+                new BigDecimal("0.03"), new BigDecimal("0.05"), new BigDecimal("5"),
+                new BigDecimal("12"), 251, "000300.SH");
+        assertThatThrownBy(() -> backtestService.createTask(badTime))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("时间止损");
+    }
+
+    @Test
     @DisplayName("策略不存在：拒绝")
     void rejectsUnknownStrategy() {
         assertThatThrownBy(() -> backtestService.createTask(request(9999, LocalDate.of(2026, 1, 1),
@@ -235,12 +257,12 @@ class BacktestServiceTest {
     private BacktestRequest request(long strategyId, LocalDate start, LocalDate end) {
         return new BacktestRequest(strategyId, start, end, "MONTHLY", 20,
                 new BigDecimal("1000000"), new BigDecimal("0.03"), new BigDecimal("0.05"),
-                new BigDecimal("5"), "000300.SH");
+                new BigDecimal("5"), new BigDecimal("0"), 0, "000300.SH");
     }
 
     private BacktestRequest request(long strategyId, int topN) {
         return new BacktestRequest(strategyId, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 9, 11),
                 "MONTHLY", topN, new BigDecimal("1000000"), new BigDecimal("0.03"),
-                new BigDecimal("0.05"), new BigDecimal("5"), "000300.SH");
+                new BigDecimal("0.05"), new BigDecimal("5"), new BigDecimal("0"), 0, "000300.SH");
     }
 }

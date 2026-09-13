@@ -95,6 +95,8 @@ public class BacktestController {
         model.addAttribute("defaultCommissionRatePct", "0.03");
         model.addAttribute("defaultStampTaxPct", "0.05");
         model.addAttribute("defaultSlippageBps", "5");
+        model.addAttribute("defaultStopLossPct", "12");
+        model.addAttribute("defaultTimeStopDays", 0);
         model.addAttribute("selectedBenchmarkId", "000300.SH");
     }
 
@@ -109,6 +111,9 @@ public class BacktestController {
         model.addAttribute("defaultCommissionRatePct", plain(params.commissionRate().movePointRight(2)));
         model.addAttribute("defaultStampTaxPct", plain(params.stampTaxRate().movePointRight(2)));
         model.addAttribute("defaultSlippageBps", plain(params.slippage().movePointRight(4)));
+        model.addAttribute("defaultStopLossPct", params.stopLossRate() == null
+                ? "0" : plain(params.stopLossRate().movePointRight(2)));
+        model.addAttribute("defaultTimeStopDays", params.timeStopDays());
         model.addAttribute("selectedBenchmarkId", params.benchmarkId());
     }
 
@@ -131,12 +136,14 @@ public class BacktestController {
                       @RequestParam(defaultValue = "0.03") BigDecimal commissionRatePct,
                       @RequestParam(defaultValue = "0.05") BigDecimal stampTaxPct,
                       @RequestParam(defaultValue = "5") BigDecimal slippageBps,
+                      @RequestParam(defaultValue = "0") BigDecimal stopLossPct,
+                      @RequestParam(defaultValue = "0") int timeStopDays,
                       @RequestParam String benchmarkId,
                       Model model) {
         try {
             long taskId = backtestService.createTask(new BacktestRequest(strategyId, startDate, endDate,
                     frequency, topN, initialCapital, commissionRatePct, stampTaxPct,
-                    slippageBps, benchmarkId));
+                    slippageBps, stopLossPct, timeStopDays, benchmarkId));
             model.addAttribute("task", backtestService.task(taskId));
             return "fragments/backtest-progress";
         } catch (BusinessException e) {

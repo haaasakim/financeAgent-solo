@@ -96,7 +96,8 @@ class BacktestControllerTest {
         BacktestParams params = new BacktestParams(strategyId, "回显策略", "hash",
                 LocalDate.of(2024, 1, 2), LocalDate.of(2024, 12, 31), RebalanceFrequency.WEEKLY, 30,
                 new BigDecimal("500000"), new BigDecimal("0.0002"), new BigDecimal("5.00"),
-                new BigDecimal("0.0008"), new BigDecimal("0.0003"), "000300.SH", DATA_THROUGH);
+                new BigDecimal("0.0008"), new BigDecimal("0.0003"),
+                new BigDecimal("0.12"), 40, "000300.SH", DATA_THROUGH);
         long taskId = insertTask(params);
 
         mockMvc.perform(get("/backtest").param("taskId", String.valueOf(taskId)))
@@ -109,6 +110,8 @@ class BacktestControllerTest {
                 .andExpect(content().string(containsString("value=\"3\"")))
                 .andExpect(content().string(containsString("value=\"WEEKLY\" selected=\"selected\"")))
                 .andExpect(content().string(containsString("name=\"topN\" value=\"30\"")))
+                .andExpect(content().string(containsString("name=\"stopLossPct\" value=\"12\"")))
+                .andExpect(content().string(containsString("name=\"timeStopDays\" value=\"40\"")))
                 .andExpect(content().string(containsString("id=\"bt-result\"")));
     }
 
@@ -120,6 +123,8 @@ class BacktestControllerTest {
                 .andExpect(content().string(containsString("value=\"MONTHLY\" selected=\"selected\"")))
                 .andExpect(content().string(containsString("name=\"topN\" value=\"20\"")))
                 .andExpect(content().string(containsString("min=\"1\" max=\"100\"")))
+                .andExpect(content().string(containsString("name=\"stopLossPct\" value=\"12\"")))
+                .andExpect(content().string(containsString("name=\"timeStopDays\" value=\"0\"")))
                 .andExpect(content().string(containsString("value=\"1000000\"")));
     }
 
@@ -252,7 +257,8 @@ class BacktestControllerTest {
         return new BacktestParams(strategyId, "配对策略", "hash",
                 LocalDate.of(2024, 1, 1), LocalDate.of(2024, 2, 29), RebalanceFrequency.DAILY, 10,
                 new BigDecimal("1000000"), new BigDecimal("0.0003"), new BigDecimal("5.00"),
-                new BigDecimal("0.0005"), new BigDecimal("0.0005"), "000300.SH", DATA_THROUGH);
+                new BigDecimal("0.0005"), new BigDecimal("0.0005"),
+                null, 0, "000300.SH", DATA_THROUGH);
     }
 
     private long saveStrategy() {

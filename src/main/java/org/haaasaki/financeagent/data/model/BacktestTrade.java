@@ -55,4 +55,8 @@ public record BacktestTrade(
     public static final String REASON_CASH = "现金不足百股";
     public static final String REASON_CANCELLED = "调仓取消";
     public static final String REASON_END = "期末未成交";
+
+    /** FILLED 卖单的成交说明（WI-010 出场风控）。 */
+    public static final String NOTE_STOP_LOSS = "止损卖出";
+    public static final String NOTE_TIME_STOP = "时间止损";
 }

@@ -18,6 +18,8 @@ import java.time.LocalDate;
  * @param minCommission  单笔最低佣金，元
  * @param stampTaxRate   印花税率，小数（仅卖出）
  * @param slippage       单边滑点率，小数
+ * @param stopLossRate   固定止损率，小数（0.12 表示跌破含费成本 -12% 卖出）；null / 0 关闭
+ * @param timeStopDays   时间止损：持有交易日数达到该值且未盈利则卖出；0 关闭
  * @param benchmarkId    基准 instrument_id，如 {@code 000300.SH}
  * @param dataThrough    运行开始时 daily_bar 最大交易日（数据快照标识）
  */
@@ -34,6 +36,8 @@ public record BacktestParams(
         BigDecimal minCommission,
         BigDecimal stampTaxRate,
         BigDecimal slippage,
+        BigDecimal stopLossRate,
+        int timeStopDays,
         String benchmarkId,
         LocalDate dataThrough) {
 }

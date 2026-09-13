@@ -44,7 +44,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 public class BacktestService {
 
-    public static final String ENGINE_VERSION = "1";
+    /** 引擎版本：2 起建仓口径为固定 N 槽等权（WI-009），3 起支持出场风控（WI-010）。 */
+    public static final String ENGINE_VERSION = "3";
     public static final int TASK_PAGE_SIZE = 20;
     public static final int TRADE_PAGE_SIZE = 50;
     public static final int TRIP_PAGE_SIZE = 50;
@@ -53,6 +54,8 @@ public class BacktestService {
     private static final BigDecimal MIN_CAPITAL = new BigDecimal("1000");
     private static final BigDecimal MAX_PCT = new BigDecimal("1");
     private static final BigDecimal MAX_SLIPPAGE_BPS = new BigDecimal("100");
+    private static final BigDecimal MAX_STOP_LOSS_PCT = new BigDecimal("50");
+    private static final int MAX_TIME_STOP_DAYS = 250;
     private static final BigDecimal HUNDRED = new BigDecimal("100");
     private static final BigDecimal TEN_THOUSAND = new BigDecimal("10000");
     /** 依赖 valuation_daily 历史序列的因子（WI-007）。 */
@@ -140,6 +143,8 @@ public class BacktestService {
         BigDecimal commission = pct(request.commissionRatePct(), "佣金率");
         BigDecimal stamp = pct(request.stampTaxPct(), "印花税");
         BigDecimal slippage = bps(request.slippageBps());
+        BigDecimal stopLoss = stopLossRate(request.stopLossPct());
+        int timeStopDays = timeStopDays(request.timeStopDays());
         String benchmarkId = request.benchmarkId();
         boolean benchmarkExists = instrumentMapper.findByType(Instrument.TYPE_INDEX).stream()
                 .anyMatch(index -> index.instrumentId().equals(benchmarkId));
@@ -159,7 +164,24 @@ public class BacktestService {
                 request.startDate(), end, frequency, request.topN(),
                 request.initialCapital().setScale(2, RoundingMode.HALF_UP),
                 commission, new BigDecimal("5.00"), stamp, slippage,
-                benchmarkId, dataThrough);
+                stopLoss, timeStopDays, benchmarkId, dataThrough);
+    }
+
+    /** 固定止损：页面百分数 → 小数；0 关闭。 */
+    private BigDecimal stopLossRate(BigDecimal pct) {
+        BigDecimal v = pct == null ? BigDecimal.ZERO : pct;
+        if (v.signum() < 0 || v.compareTo(MAX_STOP_LOSS_PCT) > 0) {
+            throw new BusinessException("止损比例必须在 0% ~ " + MAX_STOP_LOSS_PCT + "% 之间");
+        }
+        return v.divide(HUNDRED, 8, RoundingMode.HALF_UP);
+    }
+
+    /** 时间止损：0 关闭，上限 250 个交易日（约一年）。 */
+    private int timeStopDays(int days) {
+        if (days < 0 || days > MAX_TIME_STOP_DAYS) {
+            throw new BusinessException("时间止损必须在 0 ~ " + MAX_TIME_STOP_DAYS + " 个交易日之间");
+        }
+        return days;
     }
 
     private BigDecimal pct(BigDecimal value, String label) {

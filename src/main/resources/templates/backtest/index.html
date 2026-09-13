@@ -75,6 +75,16 @@
                            min="0" max="100" step="1">
                 </div>
                 <div class="field">
+                    <label>止损（%，0 关闭）</label>
+                    <input type="number" name="stopLossPct" th:value="${defaultStopLossPct}"
+                           min="0" max="50" step="1">
+                </div>
+                <div class="field">
+                    <label>时间止损（交易日，0 关闭）</label>
+                    <input type="number" name="timeStopDays" th:value="${defaultTimeStopDays}"
+                           min="0" max="250" step="1">
+                </div>
+                <div class="field">
                     <label>基准</label>
                     <select name="benchmarkId">
                         <option th:each="b : ${benchmarks}" th:value="${b.instrumentId}"

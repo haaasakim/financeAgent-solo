@@ -1,5 +1,6 @@
 package org.haaasaki.financeagent.backtest.engine;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import org.haaasaki.financeagent.data.model.BacktestTrade;
@@ -18,6 +19,10 @@ final class Order {
     private final String name;
     private final String side;
     private final LocalDate signalDate;
+    /** 买单预算 = 信号日组合净值 / topN（固定 N 槽等权，WI-009）；卖单为 null。 */
+    private final BigDecimal budget;
+    /** 成交说明（如「止损卖出」/「时间止损」），仅风控卖单非空（WI-010）。 */
+    private final String note;
     private LocalDate orderDate;
 
     private String status;
@@ -30,7 +35,8 @@ final class Order {
     private String reason;
 
     Order(long orderNo, String instrumentId, String code, String name,
-          String side, LocalDate signalDate, LocalDate orderDate) {
+          String side, LocalDate signalDate, LocalDate orderDate, BigDecimal budget,
+          String note) {
         this.orderNo = orderNo;
         this.instrumentId = instrumentId;
         this.code = code;
@@ -38,6 +44,8 @@ final class Order {
         this.side = side;
         this.signalDate = signalDate;
         this.orderDate = orderDate;
+        this.budget = budget;
+        this.note = note;
     }
 
     void fill(LocalDate date, double price, long shares,
@@ -49,7 +57,7 @@ final class Order {
         this.amount = amount;
         this.fee = fee;
         this.pnl = pnl;
-        this.reason = null;
+        this.reason = note;
     }
 
     void expire(String reason) {
@@ -85,6 +93,15 @@ final class Order {
 
     LocalDate orderDate() {
         return orderDate;
+    }
+
+    BigDecimal budget() {
+        return budget;
+    }
+
+    /** 风控卖单（止损 / 时间止损）：调仓不得取消，标的进入禁买集合。 */
+    boolean isStop() {
+        return note != null;
     }
 
     String reason() {

@@ -107,6 +107,8 @@ public class BacktestEngine {
         List<Order> orders = new ArrayList<>();
         List<Order> pending = new ArrayList<>();
         List<BacktestDaily> daily = new ArrayList<>(days.size());
+        // 止损卖出的标的在离开目标集合前禁止买回（WI-010）
+        Set<String> stoppedIds = new LinkedHashSet<>();
         BigDecimal peak = initialCapital;
         long orderSeq = 0;
 
@@ -118,12 +120,17 @@ public class BacktestEngine {
             LocalDate day = days.get(i);
 
             executePending(pending, portfolio, priceBook, instruments, cost, day, days, i);
+            orderSeq = checkStops(pending, orders, portfolio, priceBook, day, days, i, dayIndex,
+                    params, orderSeq, stoppedIds);
 
             if (signalDates.contains(day) && i + 1 < days.size()) {
                 LocalDate executionDay = days.get(i + 1);
                 List<ScreenerRow> targets = targets(dsl, day, params.topN(),
                         firstBars, dayIndex, instruments);
-                orderSeq = rebalance(pending, orders, portfolio, targets, day, executionDay, orderSeq);
+                // 固定 N 槽等权（WI-009）：每只目标预算 = 信号日收盘组合净值 / topN
+                BigDecimal slotBudget = slotBudget(portfolio, priceBook, day, params.topN());
+                orderSeq = rebalance(pending, orders, portfolio, targets, day, executionDay,
+                        orderSeq, slotBudget, stoppedIds);
             }
 
             BigDecimal marketValue = marketValue(portfolio, priceBook, day);
@@ -249,13 +256,11 @@ public class BacktestEngine {
             return;
         }
 
-        long remainingBuys = pending.stream()
-                .filter(it -> BacktestTrade.SIDE_BUY.equals(it.side()) && !it.orderDate().isAfter(day))
-                .count();
-        BigDecimal budget = portfolio.cash()
-                .divide(BigDecimal.valueOf(Math.max(1, remainingBuys)), 2, RoundingMode.DOWN);
+        // 固定 N 槽等权（WI-009）：使用信号日锁定的槽位预算，受现金约束；预算为 null 时退化为全部现金
+        BigDecimal budget = order.budget() == null ? portfolio.cash() : order.budget();
+        BigDecimal affordable = portfolio.cash().min(budget);
         BigDecimal price = cost.buyPrice(BigDecimal.valueOf(bar.open()));
-        long shares = budget.divide(price, 0, RoundingMode.DOWN).longValue() / LOT_SIZE * LOT_SIZE;
+        long shares = affordable.divide(price, 0, RoundingMode.DOWN).longValue() / LOT_SIZE * LOT_SIZE;
 
         BigDecimal amount = ZERO;
         BigDecimal fee = ZERO;
@@ -275,23 +280,94 @@ public class BacktestEngine {
 
         BigDecimal total = amount.add(fee);
         portfolio.subtractCash(total);
-        portfolio.add(order.instrumentId(), order.code(), order.name(), shares, total);
+        portfolio.add(order.instrumentId(), order.code(), order.name(), shares, total, day);
         order.fill(day, price.doubleValue(), shares, amount.doubleValue(), fee.doubleValue(), null);
         pending.remove(order);
+    }
+
+    /**
+     * 出场风控检查（WI-010）：当日收盘触发固定止损 / 时间止损，生成 T+1 开盘卖单。
+     *
+     * <p>成本价 = 含费成本 / 股数；固定止损优先于时间止损；已有卖单挂起的持仓跳过。
+     * 触发的标的加入禁买集合，直到其离开目标集合后才可再次买入。
+     */
+    private long checkStops(List<Order> pending, List<Order> orders, Portfolio portfolio,
+                            PriceBook priceBook, LocalDate day, List<LocalDate> days, int dayPosition,
+                            Map<LocalDate, Integer> tradingDayIndex, BacktestParams params,
+                            long orderSeq, Set<String> stoppedIds) {
+        BigDecimal stopRate = params.stopLossRate() == null ? ZERO : params.stopLossRate();
+        int timeStopDays = params.timeStopDays();
+        if (stopRate.signum() <= 0 && timeStopDays <= 0) {
+            return orderSeq;
+        }
+        LocalDate executionDay = nextDay(days, dayPosition, day);
+        for (Position position : List.copyOf(portfolio.positions().values())) {
+            boolean pendingSell = pending.stream().anyMatch(order ->
+                    BacktestTrade.SIDE_SELL.equals(order.side())
+                            && order.instrumentId().equals(position.instrumentId()));
+            if (pendingSell || position.shares() <= 0) {
+                continue;
+            }
+            Double close = priceBook.closeAt(position.instrumentId(), day);
+            if (close == null) {
+                continue;
+            }
+            BigDecimal costPerShare = position.cost()
+                    .divide(BigDecimal.valueOf(position.shares()), 6, RoundingMode.HALF_UP);
+            BigDecimal closePrice = BigDecimal.valueOf(close);
+            String note = null;
+            BigDecimal stopLine = costPerShare.multiply(BigDecimal.ONE.subtract(stopRate));
+            if (stopRate.signum() > 0 && closePrice.compareTo(stopLine) <= 0) {
+                note = BacktestTrade.NOTE_STOP_LOSS;
+            } else if (timeStopDays > 0
+                    && holdingDays(position, day, tradingDayIndex) >= timeStopDays
+                    && closePrice.compareTo(costPerShare) < 0) {
+                note = BacktestTrade.NOTE_TIME_STOP;
+            }
+            if (note != null) {
+                Order order = new Order(++orderSeq, position.instrumentId(), position.code(),
+                        position.name(), BacktestTrade.SIDE_SELL, day, executionDay, null, note);
+                pending.add(order);
+                orders.add(order);
+                stoppedIds.add(position.instrumentId());
+            }
+        }
+        return orderSeq;
+    }
+
+    /** 持有交易日数 = 当日与买入成交日在回测交易日序列中的下标差。 */
+    private int holdingDays(Position position, LocalDate day, Map<LocalDate, Integer> dayIndex) {
+        Integer current = dayIndex.get(day);
+        Integer entry = position.entryDate() == null ? null : dayIndex.get(position.entryDate());
+        if (current == null || entry == null) {
+            return 0;
+        }
+        return Math.max(0, current - entry);
+    }
+
+    /** 信号日收盘组合净值 / topN，向下取整到分（固定 N 槽等权，WI-009）。 */
+    private BigDecimal slotBudget(Portfolio portfolio, PriceBook priceBook,
+                                  LocalDate signal, int topN) {
+        BigDecimal nav = portfolio.cash().add(marketValue(portfolio, priceBook, signal));
+        return nav.divide(BigDecimal.valueOf(topN), 2, RoundingMode.DOWN);
     }
 
     /** 调仓：不在目标内的持仓卖出，目标内未持有的买入；与新目标冲突的挂单作废。 */
     private long rebalance(List<Order> pending, List<Order> orders, Portfolio portfolio,
                            List<ScreenerRow> targets, LocalDate signal, LocalDate executionDay,
-                           long orderSeq) {
+                           long orderSeq, BigDecimal slotBudget, Set<String> stoppedIds) {
         Set<String> targetIds = targets.stream()
                 .map(ScreenerRow::instrumentId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
+        // 止损卖出后，标的离开目标集合才解除禁买（WI-010）
+        stoppedIds.removeIf(id -> !targetIds.contains(id));
+
         pending.removeIf(order -> {
             boolean cancelBuy = BacktestTrade.SIDE_BUY.equals(order.side())
                     && !targetIds.contains(order.instrumentId());
-            boolean cancelSell = BacktestTrade.SIDE_SELL.equals(order.side())
+            // 止损 / 时间止损卖单不因标的仍在目标内而被取消
+            boolean cancelSell = BacktestTrade.SIDE_SELL.equals(order.side()) && !order.isStop()
                     && targetIds.contains(order.instrumentId());
             if (cancelBuy || cancelSell) {
                 order.expire(BacktestTrade.REASON_CANCELLED);
@@ -309,14 +385,15 @@ public class BacktestEngine {
                             && order.instrumentId().equals(position.instrumentId()));
             if (!alreadyPending) {
                 Order order = new Order(++orderSeq, position.instrumentId(), position.code(),
-                        position.name(), BacktestTrade.SIDE_SELL, signal, executionDay);
+                        position.name(), BacktestTrade.SIDE_SELL, signal, executionDay, null, null);
                 pending.add(order);
                 orders.add(order);
             }
         }
 
         for (ScreenerRow target : targets) {
-            if (portfolio.holds(target.instrumentId())) {
+            if (portfolio.holds(target.instrumentId())
+                    || stoppedIds.contains(target.instrumentId())) {
                 continue;
             }
             boolean alreadyPending = pending.stream().anyMatch(order ->
@@ -324,7 +401,8 @@ public class BacktestEngine {
                             && order.instrumentId().equals(target.instrumentId()));
             if (!alreadyPending) {
                 Order order = new Order(++orderSeq, target.instrumentId(), target.code(),
-                        target.name(), BacktestTrade.SIDE_BUY, signal, executionDay);
+                        target.name(), BacktestTrade.SIDE_BUY, signal, executionDay, slotBudget,
+                        null);
                 pending.add(order);
                 orders.add(order);
             }

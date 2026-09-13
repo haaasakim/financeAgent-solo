@@ -1,6 +1,7 @@
 package org.haaasaki.financeagent.backtest.engine;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -28,8 +29,9 @@ final class Portfolio {
         return positions.containsKey(instrumentId);
     }
 
-    void add(String instrumentId, String code, String name, long shares, BigDecimal cost) {
-        positions.put(instrumentId, new Position(instrumentId, code, name, shares, cost));
+    void add(String instrumentId, String code, String name, long shares, BigDecimal cost,
+             LocalDate entryDate) {
+        positions.put(instrumentId, new Position(instrumentId, code, name, shares, cost, entryDate));
     }
 
     Position remove(String instrumentId) {

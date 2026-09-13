@@ -32,7 +32,8 @@ import org.springframework.test.context.TestPropertySource;
  * 回测引擎测试：固定数据快照下验证撮合、费用、涨跌停、停牌与复现性。
  *
  * <p>契约（docs/work-items/WI-006-回测模块.md）：信号 T 日收盘、成交 T+1 开盘；
- * 一字涨跌停不可成交、停牌延后、100 股整手、费用与滑点必须进成交明细。
+ * 一字涨跌停不可成交、停牌延后、100 股整手、费用与滑点必须进成交明细；
+ * 建仓为固定 N 槽等权（WI-009）：每只目标预算 = 信号日净值 / topN。
  */
 @SpringBootTest
 @TestPropertySource(properties = {
@@ -234,6 +235,112 @@ class BacktestEngineTest {
     }
 
     @Test
+    @DisplayName("固定 N 槽等权：候选仅 1 只时只买 NAV/topN，剩余现金闲置")
+    void fixedSlotLeavesCashIdleWhenSingleCandidate() {
+        factorDailyMapper.upsertBatch(List.of(factor(A, LocalDate.of(2026, 8, 31), 0.10)));
+
+        BacktestResult result = backtestEngine.run(1, params(RebalanceFrequency.MONTHLY, 2,
+                new BigDecimal("100000")), dsl(), null);
+
+        assertThat(result.trades()).hasSize(1);
+        BacktestTrade buy = result.trades().get(0);
+        assertThat(buy.side()).isEqualTo(BacktestTrade.SIDE_BUY);
+        assertThat(buy.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(buy.shares()).isEqualTo(4900L);
+        assertThat(buy.amount()).isEqualTo(49_024.50);
+
+        BacktestDaily executionDay = result.daily().stream()
+                .filter(row -> row.tradeDate().equals(LocalDate.of(2026, 9, 1)))
+                .findFirst().orElseThrow();
+        assertThat(executionDay.cash()).isEqualTo(50_960.79);
+    }
+
+    @Test
+    @DisplayName("固定 N 槽等权：后续目标不吞并累计现金，仍按信号日 NAV/topN 买入")
+    void laterTargetKeepsSlotBudget() {
+        factorDailyMapper.upsertBatch(List.of(
+                factor(A, LocalDate.of(2026, 8, 28), 0.10),
+                factor(B, LocalDate.of(2026, 9, 4), 0.10)));
+
+        BacktestResult result = backtestEngine.run(1, params(RebalanceFrequency.WEEKLY, 2,
+                new BigDecimal("100000")), dsl(), null);
+
+        // 08-28 信号仅 A：预算 = 100000 / 2
+        BacktestTrade buyA = result.trades().stream()
+                .filter(t -> t.instrumentId().equals(A) && t.side().equals(BacktestTrade.SIDE_BUY))
+                .findFirst().orElseThrow();
+        assertThat(buyA.filledDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+        assertThat(buyA.amount()).isEqualTo(49_024.50);
+
+        // 09-04 信号仅 B：A 卖出后现金约 10 万，B 仍只按 NAV(09-04)/2 买入
+        BacktestTrade sellA = result.trades().stream()
+                .filter(t -> t.instrumentId().equals(A) && t.side().equals(BacktestTrade.SIDE_SELL))
+                .findFirst().orElseThrow();
+        assertThat(sellA.filledDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+        BacktestTrade buyB = result.trades().stream()
+                .filter(t -> t.instrumentId().equals(B) && t.side().equals(BacktestTrade.SIDE_BUY))
+                .findFirst().orElseThrow();
+        assertThat(buyB.filledDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+        assertThat(buyB.shares()).isEqualTo(6300L);
+        assertThat(buyB.amount()).isEqualTo(50_425.20);
+    }
+
+    @Test
+    @DisplayName("固定止损：收盘跌破含费成本 12% 触发，T+1 开盘卖出且目标内禁止买回")
+    void triggersStopLossAndBansRebuy() {
+        factorDailyMapper.upsertBatch(tradingDays.stream()
+                .map(day -> factor(A, day, 0.10)).toList());
+        // 08-26 收盘 8.70 跌破含费成本约 10.008 的 -12% 止损线（约 8.81）
+        jdbcTemplate.update("DELETE FROM daily_bar WHERE instrument_id = ? AND trade_date IN (?, ?)",
+                A, "2026-08-26", "2026-08-27");
+        dailyBarMapper.upsertBatch(List.of(
+                bar(A, LocalDate.of(2026, 8, 26), 8.90, 8.70, 10.20),
+                bar(A, LocalDate.of(2026, 8, 27), 8.75, 8.80, 8.70)));
+
+        BacktestResult result = backtestEngine.run(1,
+                params(RebalanceFrequency.DAILY, 1, new BigDecimal("100000"),
+                        new BigDecimal("0.12"), 0), dsl(), null);
+
+        // 只买入一次、止损卖出一次：止损后 A 仍在目标内但被禁买
+        assertThat(result.trades()).hasSize(2);
+        BacktestTrade buy = result.trades().get(0);
+        assertThat(buy.side()).isEqualTo(BacktestTrade.SIDE_BUY);
+        assertThat(buy.filledDate()).isEqualTo(LocalDate.of(2026, 8, 25));
+
+        BacktestTrade sell = result.trades().get(1);
+        assertThat(sell.side()).isEqualTo(BacktestTrade.SIDE_SELL);
+        assertThat(sell.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(sell.filledDate()).isEqualTo(LocalDate.of(2026, 8, 27));
+        assertThat(sell.reason()).isEqualTo(BacktestTrade.NOTE_STOP_LOSS);
+    }
+
+    @Test
+    @DisplayName("时间止损：持有满 3 个交易日且未盈利触发，T+1 开盘卖出")
+    void triggersTimeStop() {
+        factorDailyMapper.upsertBatch(tradingDays.stream()
+                .map(day -> factor(A, day, 0.10)).toList());
+        // A 收盘始终低于含费成本，持有满 3 个交易日后触发时间止损
+        jdbcTemplate.update("DELETE FROM daily_bar WHERE instrument_id = ?", A);
+        List<DailyBar> bars = new ArrayList<>();
+        bars.add(bar(A, PRE_RANGE, 9.90, 9.90, null));
+        for (LocalDate current : tradingDays) {
+            bars.add(bar(A, current, 10.00, 9.90, 9.90));
+        }
+        dailyBarMapper.upsertBatch(bars);
+
+        BacktestResult result = backtestEngine.run(1,
+                params(RebalanceFrequency.DAILY, 1, new BigDecimal("100000"), null, 3),
+                dsl(), null);
+
+        assertThat(result.trades()).hasSize(2);
+        BacktestTrade sell = result.trades().get(1);
+        assertThat(sell.side()).isEqualTo(BacktestTrade.SIDE_SELL);
+        assertThat(sell.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(sell.filledDate()).isEqualTo(LocalDate.of(2026, 8, 31));
+        assertThat(sell.reason()).isEqualTo(BacktestTrade.NOTE_TIME_STOP);
+    }
+
+    @Test
     @DisplayName("估值条件回测：信号日取当日 PE 历史值，信号日之后的变化不得影响选股")
     void backtestsValuationConditionAtSignalDate() {
         factorDailyMapper.upsertBatch(List.of(
@@ -259,10 +366,15 @@ class BacktestEngineTest {
     }
 
     private BacktestParams params(RebalanceFrequency frequency, int topN, BigDecimal capital) {
+        return params(frequency, topN, capital, null, 0);
+    }
+
+    private BacktestParams params(RebalanceFrequency frequency, int topN, BigDecimal capital,
+                                  BigDecimal stopLossRate, int timeStopDays) {
         return new BacktestParams(1, "测试策略", "hash", START, END, frequency, topN, capital,
                 new BigDecimal("0.0003"), new BigDecimal("5.00"),
                 new BigDecimal("0.0005"), new BigDecimal("0.0005"),
-                INDEX, END);
+                stopLossRate, timeStopDays, INDEX, END);
     }
 
     private ScreenerDsl dsl() {

@@ -15,6 +15,8 @@ import java.time.LocalDate;
  * @param commissionRatePct 佣金率，百分数（0.03 表示万 3）
  * @param stampTaxPct      印花税率，百分数（0.05 表示 0.05%），仅卖出
  * @param slippageBps      单边滑点，bps（5 表示 5bps）
+ * @param stopLossPct      固定止损，百分数（12 表示收盘跌破含费成本 -12% 卖出），0 关闭
+ * @param timeStopDays     时间止损，持有交易日数达到该值且未盈利则卖出，0 关闭
  * @param benchmarkId      基准 instrument_id
  */
 public record BacktestRequest(
@@ -27,5 +29,7 @@ public record BacktestRequest(
         BigDecimal commissionRatePct,
         BigDecimal stampTaxPct,
         BigDecimal slippageBps,
+        BigDecimal stopLossPct,
+        int timeStopDays,
         String benchmarkId) {
 }
