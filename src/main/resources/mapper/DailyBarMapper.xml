@@ -35,6 +35,13 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="InstrumentFirstBarMap" type="org.haaasaki.financeagent.data.model.InstrumentFirstBar">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="first_date" javaType="java.time.LocalDate"/>
+        </constructor>
+    </resultMap>
+
     <sql id="columns">
         instrument_id, trade_date, open, high, low, close, pre_close, volume,
         amount, pct_chg, turnover_rate, adj_type, source
@@ -108,8 +115,25 @@
         SELECT MAX(trade_date) FROM daily_bar WHERE instrument_id = #{instrumentId}
     </select>
 
+    <select id="findGlobalMaxTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM daily_bar
+    </select>
+
     <select id="findMinTradeDate" resultType="java.time.LocalDate">
         SELECT MIN(trade_date) FROM daily_bar WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="findTradeDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT trade_date
+        FROM daily_bar
+        WHERE instrument_id = #{instrumentId}
+        ORDER BY trade_date
+    </select>
+
+    <select id="findFirstTradeDates" resultMap="InstrumentFirstBarMap">
+        SELECT instrument_id, MIN(trade_date) AS first_date
+        FROM daily_bar
+        GROUP BY instrument_id
     </select>
 
     <select id="countByInstrument" resultType="long">

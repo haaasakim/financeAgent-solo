@@ -1,0 +1,13 @@
+<!-- 回测失败片段：展示原因摘要与重试入口，不展示堆栈。 -->
+<div id="bt-failed" th:fragment="failed" xmlns:th="http://www.thymeleaf.org">
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title">回测失败</div>
+            <div class="card-sub" th:text="|任务 #${task.id} · ${task.strategyName}|">--</div>
+        </div>
+        <div class="notice" th:text="${task.message} ?: '回测执行失败，请检查参数与数据后重试'">--</div>
+        <div class="toolbar" style="margin-top:12px">
+            <a class="btn btn-sm" th:href="@{/backtest}">返回参数页</a>
+        </div>
+    </div>
+</div>

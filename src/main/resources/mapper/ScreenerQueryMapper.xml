@@ -89,4 +89,32 @@
         <include refid="baseFrom"/>
     </select>
 
+    <!--
+      历史截面（回测）：INNER JOIN 当日因子行——有因子行即当日有行情，
+      停牌标的自然不进入候选；估值因子取当日 valuation_daily 行（WI-007），
+      无历史估值的标的该因子为 NULL，相关条件不成立。
+    -->
+    <sql id="baseFromAt">
+        FROM instrument i
+        JOIN factor_daily f ON f.instrument_id = i.instrument_id
+            AND f.trade_date = #{asOf}
+        LEFT JOIN valuation_daily v ON v.instrument_id = i.instrument_id
+            AND v.trade_date = f.trade_date
+        WHERE i.instrument_type IN ('STOCK', 'ETF')
+    </sql>
+
+    <select id="findAllCandidatesAt" resultMap="ScreenerRowMap">
+        SELECT i.instrument_id, i.code, i.name,
+               NULL AS last_price, NULL AS pct_chg, NULL AS pe_ttm, NULL AS pb,
+               f.return_20, NULL AS score
+        <include refid="baseFromAt"/>
+        <include refid="conditionFilter"/>
+        ORDER BY i.instrument_id
+    </select>
+
+    <select id="findFactorValuesAt" resultMap="FactorValueMap">
+        SELECT i.instrument_id, (${expression}) AS factor_value
+        <include refid="baseFromAt"/>
+    </select>
+
 </mapper>

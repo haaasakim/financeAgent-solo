@@ -119,7 +119,10 @@
                         <input type="hidden" name="dsl" :value="dslJson()">
                         <button class="btn btn-primary" type="submit">执行选股</button>
                     </form>
-                    <button class="btn" type="button" disabled title="M5 开发中">拿去回测</button>
+                    <a class="btn" th:if="${selectedStrategyId != null}"
+                       th:href="@{/backtest(strategyId=${selectedStrategyId})}">拿去回测</a>
+                    <span class="btn disabled" th:unless="${selectedStrategyId != null}"
+                          title="先保存为策略后再回测">拿去回测</span>
                     <form hx-post="/fragments/screener/strategies"
                           hx-target="#strategy-list" hx-swap="outerHTML"
                           hx-indicator="#strategy-loading">

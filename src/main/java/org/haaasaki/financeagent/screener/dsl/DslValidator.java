@@ -32,6 +32,29 @@ public final class DslValidator {
         validateGroup("排除", dsl.not(), registry);
     }
 
+    /**
+     * 回测专用校验：在普通校验之后，要求每个因子都有历史截面表达式；
+     * 快照类因子（PE-TTM / PB）与财务占位因子没有历史序列，禁止用于回测。
+     */
+    public static void validateBacktest(ScreenerDsl dsl, FactorRegistry registry) {
+        validate(dsl, registry);
+        validateBacktestGroup("全部满足", dsl.all(), registry);
+        validateBacktestGroup("任一满足", dsl.any(), registry);
+        validateBacktestGroup("排除", dsl.not(), registry);
+    }
+
+    private static void validateBacktestGroup(String groupLabel, java.util.List<Condition> conditions,
+                                              FactorRegistry registry) {
+        for (Condition condition : conditions) {
+            FactorDefinition definition = registry.find(condition.factor());
+            if (definition == null || !definition.backtestable()) {
+                String label = definition == null ? condition.factor() : definition.label();
+                throw new BusinessException(
+                        "因子「" + label + "」无历史数据，暂不可用于回测");
+            }
+        }
+    }
+
     private static void validateGroup(String groupLabel, java.util.List<Condition> conditions,
                                       FactorRegistry registry) {
         if (conditions.size() > MAX_PER_GROUP) {

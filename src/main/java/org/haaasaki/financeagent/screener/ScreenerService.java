@@ -1,5 +1,6 @@
 package org.haaasaki.financeagent.screener;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -83,9 +84,9 @@ public class ScreenerService {
     public ScreenerResult screen(ScreenerDsl dsl, int page) {
         DslValidator.validate(dsl, factorRegistry);
 
-        List<SqlCondition> all = resolve(dsl.all());
-        List<SqlCondition> any = resolve(dsl.any());
-        List<SqlCondition> not = resolve(dsl.not());
+        List<SqlCondition> all = resolve(dsl.all(), false);
+        List<SqlCondition> any = resolve(dsl.any(), false);
+        List<SqlCondition> not = resolve(dsl.not(), false);
 
         long total = screenerQueryMapper.countCandidates(all, any, not);
         int currentPage = Math.max(1, page);
@@ -96,7 +97,7 @@ public class ScreenerService {
             return new ScreenerResult(List.of(), 0, currentPage, ScreenerResult.DEFAULT_SIZE);
         }
 
-        List<ScreenerRow> ranked = rank(screenerQueryMapper.findAllCandidates(all, any, not), dsl);
+        List<ScreenerRow> ranked = rank(screenerQueryMapper.findAllCandidates(all, any, not), dsl, null);
         int offset = (currentPage - 1) * ScreenerResult.DEFAULT_SIZE;
         List<ScreenerRow> rows = offset >= ranked.size()
                 ? List.of()
@@ -105,25 +106,48 @@ public class ScreenerService {
         return new ScreenerResult(rows, total, currentPage, ScreenerResult.DEFAULT_SIZE);
     }
 
-    /** 白名单解析：因子 key → 注册表表达式，运算符 → 枚举符号。 */
-    private List<SqlCondition> resolve(List<Condition> conditions) {
+    /**
+     * 回测前的策略校验：拒绝无历史序列的因子（估值 / 财务占位）。
+     */
+    public void validateBacktest(ScreenerDsl dsl) {
+        DslValidator.validateBacktest(dsl, factorRegistry);
+    }
+
+    /**
+     * 历史截面求值（回测用）：以 {@code asOf} 交易日为截面，按同一 DSL 与评分口径
+     * 返回前 {@code limit} 名。估值等无历史序列的因子由校验直接拒绝。
+     */
+    public List<ScreenerRow> evaluateAt(ScreenerDsl dsl, LocalDate asOf, int limit) {
+        DslValidator.validateBacktest(dsl, factorRegistry);
+
+        List<SqlCondition> all = resolve(dsl.all(), true);
+        List<SqlCondition> any = resolve(dsl.any(), true);
+        List<SqlCondition> not = resolve(dsl.not(), true);
+
+        List<ScreenerRow> ranked = rank(
+                screenerQueryMapper.findAllCandidatesAt(asOf, all, any, not), dsl, asOf);
+        return ranked.size() <= limit ? ranked : List.copyOf(ranked.subList(0, limit));
+    }
+
+    /** 白名单解析：因子 key → 注册表表达式（按最新截面或历史截面），运算符 → 枚举符号。 */
+    private List<SqlCondition> resolve(List<Condition> conditions, boolean backtest) {
         return conditions.stream()
                 .map(condition -> {
                     FactorDefinition definition = factorRegistry.find(condition.factor());
-                    return new SqlCondition(
-                            definition.expression(),
-                            condition.op().sql(),
-                            condition.value());
+                    String expression = backtest
+                            ? definition.backtestExpression()
+                            : definition.expression();
+                    return new SqlCondition(expression, condition.op().sql(), condition.value());
                 })
                 .toList();
     }
 
-    /** 评分降序；无评分最后；同分按 instrument_id 升序。 */
-    private List<ScreenerRow> rank(List<ScreenerRow> matched, ScreenerDsl dsl) {
-        List<ScoringCondition> conditions = scoringConditions(dsl);
+    /** 评分降序；无评分最后；同分按 instrument_id 升序。asOf 非空时用历史截面取因子值。 */
+    private List<ScreenerRow> rank(List<ScreenerRow> matched, ScreenerDsl dsl, LocalDate asOf) {
+        List<ScoringCondition> conditions = scoringConditions(dsl, asOf != null);
         List<ScreenerRow> scored = conditions.isEmpty()
                 ? new ArrayList<>(matched)
-                : score(matched, conditions);
+                : score(matched, conditions, asOf);
         scored.sort(Comparator
                 .comparingDouble((ScreenerRow row) -> row.score() == null ? -1.0 : row.score())
                 .reversed()
@@ -132,15 +156,16 @@ public class ScreenerService {
     }
 
     /** 参与评分的条件：all / any 组中的数值因子 + 方向明确（gt/gte/lt/lte）的条件。 */
-    private List<ScoringCondition> scoringConditions(ScreenerDsl dsl) {
+    private List<ScoringCondition> scoringConditions(ScreenerDsl dsl, boolean backtest) {
         List<ScoringCondition> result = new ArrayList<>();
-        addScoringConditions(result, dsl.all(), false);
-        addScoringConditions(result, dsl.any(), true);
+        addScoringConditions(result, dsl.all(), false, backtest);
+        addScoringConditions(result, dsl.any(), true, backtest);
         return result;
     }
 
     private void addScoringConditions(List<ScoringCondition> target,
-                                      List<Condition> conditions, boolean anyGroup) {
+                                      List<Condition> conditions, boolean anyGroup,
+                                      boolean backtest) {
         for (Condition condition : conditions) {
             FactorDefinition definition = factorRegistry.find(condition.factor());
             if (definition.kind() != FactorKind.NUMBER
@@ -155,7 +180,10 @@ public class ScreenerService {
                     continue;
                 }
             }
-            target.add(new ScoringCondition(definition.key(), definition.expression(),
+            String expression = backtest
+                    ? definition.backtestExpression()
+                    : definition.expression();
+            target.add(new ScoringCondition(definition.key(), expression,
                     condition.op(), condition.value(), higherBetter, anyGroup));
         }
     }
@@ -164,7 +192,8 @@ public class ScreenerService {
      * 相对百分位评分：每个数值条件在命中集内取值，按方向折算 0~1 后平均 ×100。
      * any 组条件仅在该行确实满足时参与；无参与条件为 NULL。
      */
-    private List<ScreenerRow> score(List<ScreenerRow> matched, List<ScoringCondition> conditions) {
+    private List<ScreenerRow> score(List<ScreenerRow> matched,
+                                    List<ScoringCondition> conditions, LocalDate asOf) {
         Set<String> matchedIds = matched.stream()
                 .map(ScreenerRow::instrumentId)
                 .collect(Collectors.toSet());
@@ -175,7 +204,10 @@ public class ScreenerService {
         Map<String, Map<String, Double>> valuesByFactor = new LinkedHashMap<>();
         Map<String, double[]> distributions = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : expressionByFactor.entrySet()) {
-            List<FactorValue> values = screenerQueryMapper.findFactorValues(entry.getValue()).stream()
+            List<FactorValue> all = asOf == null
+                    ? screenerQueryMapper.findFactorValues(entry.getValue())
+                    : screenerQueryMapper.findFactorValuesAt(asOf, entry.getValue());
+            List<FactorValue> values = all.stream()
                     .filter(value -> value.value() != null
                             && matchedIds.contains(value.instrumentId()))
                     .toList();

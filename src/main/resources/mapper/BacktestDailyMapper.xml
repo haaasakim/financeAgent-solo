@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.BacktestDailyMapper">
+
+    <resultMap id="BacktestDailyMap" type="org.haaasaki.financeagent.data.model.BacktestDaily">
+        <constructor>
+            <idArg column="task_id" javaType="_long"/>
+            <idArg column="trade_date" javaType="java.time.LocalDate"/>
+            <arg column="nav" javaType="_double"/>
+            <arg column="cash" javaType="_double"/>
+            <arg column="market_value" javaType="_double"/>
+            <arg column="benchmark_nav" javaType="_double"/>
+            <arg column="drawdown" javaType="_double"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="batchInsert">
+        INSERT INTO backtest_daily (task_id, trade_date, nav, cash, market_value,
+                                    benchmark_nav, drawdown, created_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.taskId}, #{it.tradeDate}, #{it.nav}, #{it.cash}, #{it.marketValue},
+            #{it.benchmarkNav}, #{it.drawdown},
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (task_id, trade_date) DO UPDATE SET
+        nav           = excluded.nav,
+        cash          = excluded.cash,
+        market_value  = excluded.market_value,
+        benchmark_nav = excluded.benchmark_nav,
+        drawdown      = excluded.drawdown
+    </insert>
+
+    <select id="findByTask" resultMap="BacktestDailyMap">
+        SELECT task_id, trade_date, nav, cash, market_value, benchmark_nav, drawdown
+        FROM backtest_daily
+        WHERE task_id = #{taskId}
+        ORDER BY trade_date
+    </select>
+
+</mapper>

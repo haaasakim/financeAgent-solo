@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.BacktestTradeMapper">
+
+    <resultMap id="BacktestTradeMap" type="org.haaasaki.financeagent.data.model.BacktestTrade">
+        <constructor>
+            <idArg column="task_id" javaType="_long"/>
+            <idArg column="order_no" javaType="_long"/>
+            <arg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="side" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="signal_date" javaType="java.time.LocalDate"/>
+            <arg column="order_date" javaType="java.time.LocalDate"/>
+            <arg column="filled_date" javaType="java.time.LocalDate"/>
+            <arg column="price" javaType="java.lang.Double"/>
+            <arg column="shares" javaType="java.lang.Long"/>
+            <arg column="amount" javaType="java.lang.Double"/>
+            <arg column="fee" javaType="java.lang.Double"/>
+            <arg column="pnl" javaType="java.lang.Double"/>
+            <arg column="reason" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="batchInsert">
+        INSERT INTO backtest_trade (task_id, order_no, instrument_id, code, name, side, status,
+                                    signal_date, order_date, filled_date, price, shares,
+                                    amount, fee, pnl, reason, created_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.taskId}, #{it.orderNo}, #{it.instrumentId}, #{it.code}, #{it.name},
+            #{it.side}, #{it.status}, #{it.signalDate}, #{it.orderDate}, #{it.filledDate},
+            #{it.price}, #{it.shares}, #{it.amount}, #{it.fee}, #{it.pnl}, #{it.reason},
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+    </insert>
+
+    <select id="findPage" resultMap="BacktestTradeMap">
+        SELECT task_id, order_no, instrument_id, code, name, side, status,
+               signal_date, order_date, filled_date, price, shares, amount, fee, pnl, reason
+        FROM backtest_trade
+        WHERE task_id = #{taskId}
+        ORDER BY order_no
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countByTask" resultType="long">
+        SELECT COUNT(*) FROM backtest_trade WHERE task_id = #{taskId}
+    </select>
+
+</mapper>

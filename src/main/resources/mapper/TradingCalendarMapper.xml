@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.TradingCalendarMapper">
+
+    <!-- 只补不删：由基准指数日K回填，重复执行幂等 -->
+    <insert id="insertOpenDays">
+        INSERT OR IGNORE INTO trading_calendar (trade_date, is_open, note, created_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it}, 1, NULL, strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+    </insert>
+
+    <select id="findOpenDates" resultType="java.time.LocalDate">
+        SELECT trade_date
+        FROM trading_calendar
+        WHERE is_open = 1
+          AND trade_date BETWEEN #{from} AND #{to}
+        ORDER BY trade_date
+    </select>
+
+    <select id="count" resultType="_long">
+        SELECT COUNT(*) FROM trading_calendar
+    </select>
+
+</mapper>

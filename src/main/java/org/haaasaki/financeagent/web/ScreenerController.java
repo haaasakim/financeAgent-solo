@@ -80,6 +80,7 @@ public class ScreenerController {
         model.addAttribute("availableFactors", availableFactors());
         model.addAttribute("availableFactorsJson", availableFactorsJson());
         model.addAttribute("sourceLabel", sourceLabel);
+        model.addAttribute("selectedStrategyId", strategyId);
         return "screener/index";
     }
 

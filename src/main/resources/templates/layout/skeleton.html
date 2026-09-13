@@ -11,7 +11,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title th:text="|financeAgent · ${title}|">financeAgent</title>
-    <link rel="stylesheet" th:href="@{/css/app.css?v=2}">
+    <link rel="stylesheet" th:href="@{/css/app.css?v=3}">
 </head>
 <body>
 
@@ -22,7 +22,7 @@
             <a class="tab" th:classappend="${active == 'dashboard'} ? 'active'" th:href="@{/}">总览</a>
             <a class="tab" th:classappend="${active == 'market'} ? 'active'" th:href="@{/market}">市场</a>
             <a class="tab" th:classappend="${active == 'screener'} ? 'active'" th:href="@{/screener}">选股</a>
-            <span class="tab disabled" title="M5 开发中">回测</span>
+            <a class="tab" th:classappend="${active == 'backtest'} ? 'active'" th:href="@{/backtest}">回测</a>
         </nav>
     </div>
 </header>
@@ -30,7 +30,7 @@
 <div th:fragment="scripts">
     <script th:src="@{/js/htmx.min.js?v=2.0.4}"></script>
     <script th:src="@{/js/alpine.min.js?v=3.14.8}" defer></script>
-    <script th:src="@{/js/app.js?v=2}"></script>
+    <script th:src="@{/js/app.js?v=3}"></script>
 </div>
 
 </body>

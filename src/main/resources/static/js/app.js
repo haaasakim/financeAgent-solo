@@ -11,7 +11,15 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     initKline();
+    initBacktestCharts();
   });
+
+  /* HTMX 换入回测结果后重新初始化图表（onLoad 对初始加载不触发，由 DOMContentLoaded 覆盖）。 */
+  if (window.htmx) {
+    htmx.onLoad(function () {
+      initBacktestCharts();
+    });
+  }
 
   window.addEventListener('resize', function () {
     Object.keys(charts).forEach(function (key) {
@@ -156,6 +164,96 @@
 
     charts.kline = chart;
   }
+
+  /*
+    回测结果图表：净值（策略 vs 基准）与回撤。数据由结果片段注入 window.__BT__。
+    重复初始化时先销毁旧实例，避免 HTMX 换入结果后残留。
+  */
+  function initBacktestCharts() {
+    var el = document.getElementById('bt-nav-chart');
+    if (!el || typeof echarts === 'undefined') {
+      return;
+    }
+    var data = window.__BT__;
+    if (!data || !data.dates || data.dates.length === 0) {
+      return;
+    }
+
+    if (charts.btNav) {
+      charts.btNav.dispose();
+      charts.btNav = null;
+    }
+    if (charts.btDd) {
+      charts.btDd.dispose();
+      charts.btDd = null;
+    }
+
+    var primary = cssVar('--primary') || '#185FA5';
+    var text3 = cssVar('--text-3') || '#888780';
+    var down = cssVar('--down') || '#1D9E75';
+    var grid = cssVar('--border') || '#E5E5E1';
+
+    charts.btNav = echarts.init(el);
+    charts.btNav.setOption({
+      animation: false,
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['策略', '基准'], right: 10, top: 4, textStyle: { color: text3, fontSize: 11 } },
+      grid: { left: 64, right: 20, top: 28, bottom: 28 },
+      xAxis: {
+        type: 'category',
+        data: data.dates,
+        axisLabel: { color: text3, fontSize: 10 },
+        axisLine: { lineStyle: { color: grid } }
+      },
+      yAxis: {
+        type: 'value',
+        scale: true,
+        axisLabel: { color: text3, fontSize: 10 },
+        splitLine: { lineStyle: { color: grid } }
+      },
+      series: [
+        {
+          name: '策略', type: 'line', data: data.nav, symbol: 'none',
+          lineStyle: { width: 1.5, color: primary }
+        },
+        {
+          name: '基准', type: 'line', data: data.benchmark, symbol: 'none',
+          lineStyle: { width: 1, color: text3 }
+        }
+      ]
+    });
+
+    var ddEl = document.getElementById('bt-dd-chart');
+    if (ddEl) {
+      charts.btDd = echarts.init(ddEl);
+      charts.btDd.setOption({
+        animation: false,
+        tooltip: { trigger: 'axis', valueFormatter: function (v) { return v + '%'; } },
+        grid: { left: 64, right: 20, top: 16, bottom: 28 },
+        xAxis: {
+          type: 'category',
+          data: data.dates,
+          axisLabel: { color: text3, fontSize: 10 },
+          axisLine: { lineStyle: { color: grid } }
+        },
+        yAxis: {
+          type: 'value',
+          max: 0,
+          axisLabel: { color: text3, fontSize: 10, formatter: '{value}%' },
+          splitLine: { lineStyle: { color: grid } }
+        },
+        series: [
+          {
+            name: '回撤', type: 'line', data: data.drawdown, symbol: 'none',
+            lineStyle: { width: 1, color: down },
+            areaStyle: { color: down, opacity: 0.12 }
+          }
+        ]
+      });
+    }
+  }
+
+  window.initBacktestCharts = initBacktestCharts;
 })();
 
 /*

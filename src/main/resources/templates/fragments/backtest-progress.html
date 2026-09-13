@@ -1,0 +1,28 @@
+<!--
+  回测进度片段：每 2s 轮询状态，直到服务端返回结果片段（不再带轮询属性）。
+-->
+<div id="bt-progress" th:fragment="progress" xmlns:th="http://www.thymeleaf.org"
+     th:with="percent=${task.progressTotal > 0 ? (task.progressDone * 100 / task.progressTotal) : 0},
+              progressLabel=${task.progressTotal > 0
+                  ? '已处理 ' + task.progressDone + ' / ' + task.progressTotal + ' 个交易日'
+                  : (task.status == 'PENDING' ? '排队中…' : '准备交易日历…')}"
+     th:attr="hx-get=@{/fragments/backtest/{id}/status(id=${task.id})}"
+     hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML">
+
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title"
+                 th:text="${task.status == 'PENDING'} ? '排队中…' : '回测运行中…'">回测运行中…</div>
+            <div class="card-sub" th:text="|任务 #${task.id} · ${task.strategyName}|">--</div>
+        </div>
+        <div class="progress-wrap" style="padding:0 0 4px">
+            <div class="progress-meta">
+                <span th:text="${progressLabel}">--</span>
+                <span th:text="|${percent}%|">0%</span>
+            </div>
+            <div class="progress-bar">
+                <i th:style="|width:${percent}%|"></i>
+            </div>
+        </div>
+    </div>
+</div>

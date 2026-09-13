@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/skeleton :: head('回测')}"></head>
+<body>
+
+<header th:replace="~{layout/skeleton :: nav('backtest')}"></header>
+
+<main class="wrap">
+
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">
+            <div class="card-title">回测参数</div>
+            <div class="card-sub" th:if="${defaultEnd != null}"
+                 th:text="|数据截至 ${defaultEnd} · 信号 T 日收盘，成交 T+1 开盘|">--</div>
+        </div>
+
+        <form id="bt-form" hx-post="/fragments/backtest/run"
+              hx-target="#bt-run-area" hx-swap="innerHTML"
+              hx-indicator="#bt-loading">
+            <div class="form-grid">
+                <div class="field">
+                    <label>策略</label>
+                    <select name="strategyId" required>
+                        <option value="">选择策略</option>
+                        <option th:each="s : ${strategies}" th:value="${s.id}" th:text="${s.name}"
+                                th:selected="${selectedStrategyId != null and selectedStrategyId == s.id}"></option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>开始日期</label>
+                    <input type="date" name="startDate" required th:value="${defaultStart}">
+                </div>
+                <div class="field">
+                    <label>结束日期</label>
+                    <input type="date" name="endDate" required th:value="${defaultEnd}">
+                </div>
+                <div class="field">
+                    <label>调仓频率</label>
+                    <select name="frequency">
+                        <option value="MONTHLY" selected>每月</option>
+                        <option value="WEEKLY">每周</option>
+                        <option value="QUARTERLY">每季</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>持仓数量</label>
+                    <select name="topN">
+                        <option value="10">Top 10</option>
+                        <option value="20" selected>Top 20</option>
+                        <option value="30">Top 30</option>
+                        <option value="50">Top 50</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label>初始资金（元）</label>
+                    <input type="number" name="initialCapital" value="1000000" min="1000" step="1000">
+                </div>
+                <div class="field">
+                    <label>佣金率（%）</label>
+                    <input type="number" name="commissionRatePct" value="0.03" min="0" max="1" step="0.001">
+                </div>
+                <div class="field">
+                    <label>印花税（%，卖出）</label>
+                    <input type="number" name="stampTaxPct" value="0.05" min="0" max="1" step="0.001">
+                </div>
+                <div class="field">
+                    <label>滑点（bps）</label>
+                    <input type="number" name="slippageBps" value="5" min="0" max="100" step="1">
+                </div>
+                <div class="field">
+                    <label>基准</label>
+                    <select name="benchmarkId">
+                        <option th:each="b : ${benchmarks}" th:value="${b.instrumentId}"
+                                th:text="${b.name}"
+                                th:selected="${b.instrumentId == '000300.SH'}"></option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="toolbar" style="margin-top:16px">
+                <button class="btn btn-primary" type="submit"
+                        th:disabled="${#lists.isEmpty(strategies) or #lists.isEmpty(benchmarks)}">
+                    开始回测
+                </button>
+                <span id="bt-loading" class="card-sub htmx-indicator">提交中…</span>
+                <span class="card-sub" th:if="${#lists.isEmpty(strategies)}">
+                    还没有已保存策略，先到「选股」页保存一个
+                </span>
+                <span class="card-sub" th:unless="${#lists.isEmpty(benchmarks)}">
+                    回测仅支持含历史序列的技术因子；估值类因子（PE/PB）暂不可用
+                </span>
+            </div>
+        </form>
+    </div>
+
+    <div id="bt-run-area">
+        <div th:if="${loadError != null}" class="notice" th:text="${loadError}">--</div>
+        <div th:if="${result != null}">
+            <div th:replace="~{fragments/backtest-result :: result}"></div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top:16px" th:if="${!recentTasks.isEmpty()}">
+        <div class="card-hd">
+            <div class="card-title">最近回测</div>
+        </div>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                <tr>
+                    <th>编号</th>
+                    <th>策略</th>
+                    <th>状态</th>
+                    <th class="num">累计收益</th>
+                    <th class="num">年化收益</th>
+                    <th class="num">最大回撤</th>
+                    <th class="num">夏普</th>
+                    <th>创建时间</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="t : ${recentTasks}">
+                    <td class="code" th:text="${t.id}">1</td>
+                    <td th:text="${t.strategyName}">策略</td>
+                    <td>
+                        <span th:switch="${t.status}">
+                            <span th:case="'SUCCESS'" class="flat">成功</span>
+                            <span th:case="'FAILED'" class="down">失败</span>
+                            <span th:case="'RUNNING'" th:text="|运行中 ${t.progressDone}/${t.progressTotal}|">运行中</span>
+                            <span th:case="*">排队中</span>
+                        </span>
+                    </td>
+                    <td class="num"
+                        th:classappend="${t.cumulativeReturn != null} ? (${t.cumulativeReturn > 0} ? 'up' : (${t.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
+                        th:text="${t.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                    <td class="num"
+                        th:text="${t.annualReturn != null} ? ${#numbers.formatDecimal(t.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                    <td class="num down"
+                        th:text="${t.maxDrawdown != null} ? ${#numbers.formatDecimal(t.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
+                    <td class="num"
+                        th:text="${t.sharpe != null} ? ${#numbers.formatDecimal(t.sharpe, 1, 2)} : '--'">--</td>
+                    <td class="card-sub" th:text="${t.createdAt}">--</td>
+                    <td>
+                        <a class="btn btn-sm" th:if="${t.status == 'SUCCESS'}"
+                           th:href="@{/backtest(taskId=${t.id})}">查看</a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<script th:src="@{/js/echarts.min.js?v=5.5.0}"></script>
+<div th:replace="~{layout/skeleton :: scripts}"></div>
+</body>
+</html>

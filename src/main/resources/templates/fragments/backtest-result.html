@@ -1,0 +1,76 @@
+<!--
+  回测结果片段：指标卡 + 净值/回撤图 + 交易流水。
+  进度轮询命中 SUCCESS 时返回本片段（不带轮询属性，轮询停止）；
+  /backtest?taskId=N 也会直接渲染本片段。图表数据由 window.__BT__ 注入。
+-->
+<div id="bt-result" th:fragment="result" xmlns:th="http://www.thymeleaf.org"
+     th:with="task=${result.task}">
+
+    <div class="metrics cols-6">
+        <div class="metric">
+            <div class="metric-label">累计收益</div>
+            <div class="metric-val"
+                 th:classappend="${task.cumulativeReturn >= 0} ? 'up' : 'down'"
+                 th:text="${#numbers.formatDecimal(task.cumulativeReturn * 100, 1, 2) + '%'}">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">年化收益</div>
+            <div class="metric-val"
+                 th:classappend="${task.annualReturn != null} ? (${task.annualReturn >= 0} ? 'up' : 'down') : ''"
+                 th:text="${task.annualReturn != null} ? ${#numbers.formatDecimal(task.annualReturn * 100, 1, 2) + '%'} : '--'">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">最大回撤</div>
+            <div class="metric-val down"
+                 th:text="${task.maxDrawdown != null} ? ${#numbers.formatDecimal(task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">夏普比率</div>
+            <div class="metric-val"
+                 th:text="${task.sharpe != null} ? ${#numbers.formatDecimal(task.sharpe, 1, 2)} : '--'">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">胜率</div>
+            <div class="metric-val"
+                 th:text="${task.winRate != null} ? ${#numbers.formatDecimal(task.winRate * 100, 1, 1) + '%'} : '--'">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">年化换手</div>
+            <div class="metric-val"
+                 th:text="${task.turnover != null} ? ${#numbers.formatDecimal(task.turnover * 100, 1, 1) + '%'} : '--'">--</div>
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+        <div class="card-hd">
+            <div class="card-title">净值曲线</div>
+            <div class="card-sub" th:if="${excessReturn != null}"
+                 th:text="|策略对比基准 ${task.benchmarkId} · 超额 ${#numbers.formatDecimal(excessReturn * 100, 1, 2)}%|">--</div>
+        </div>
+        <div id="bt-nav-chart" class="bt-chart"></div>
+        <div class="card-hd" style="margin-top:12px">
+            <div class="card-title">回撤曲线</div>
+        </div>
+        <div id="bt-dd-chart" class="bt-chart bt-chart-sm"></div>
+    </div>
+
+    <div class="card">
+        <div class="card-hd">
+            <div class="card-title">交易流水</div>
+            <div class="card-sub" th:text="|信号 ${task.strategyName} · 含未成交订单|">--</div>
+        </div>
+        <div th:replace="~{fragments/backtest-trades :: trades}"></div>
+    </div>
+
+    <script th:inline="javascript">
+        window.__BT__ = {
+            dates: /*[[${dates}]]*/ [],
+            nav: /*[[${navSeries}]]*/ [],
+            benchmark: /*[[${benchmarkSeries}]]*/ [],
+            drawdown: /*[[${drawdownSeries}]]*/ []
+        };
+        if (window.initBacktestCharts) {
+            initBacktestCharts();
+        }
+    </script>
+</div>

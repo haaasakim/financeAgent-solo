@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.BacktestTaskMapper">
+
+    <!-- 构造器映射，参数顺序必须与 BacktestTask record 头部一致；原始类型用下划线别名 -->
+    <resultMap id="BacktestTaskMap" type="org.haaasaki.financeagent.data.model.BacktestTask">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="strategy_id" javaType="java.lang.Long"/>
+            <arg column="strategy_name" javaType="java.lang.String"/>
+            <arg column="strategy_hash" javaType="java.lang.String"/>
+            <arg column="engine_version" javaType="java.lang.String"/>
+            <arg column="params_json" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="progress_done" javaType="_int"/>
+            <arg column="progress_total" javaType="_int"/>
+            <arg column="message" javaType="java.lang.String"/>
+            <arg column="data_through" javaType="java.time.LocalDate"/>
+            <arg column="benchmark_id" javaType="java.lang.String"/>
+            <arg column="initial_capital" javaType="java.lang.Double"/>
+            <arg column="final_nav" javaType="java.lang.Double"/>
+            <arg column="cumulative_return" javaType="java.lang.Double"/>
+            <arg column="annual_return" javaType="java.lang.Double"/>
+            <arg column="max_drawdown" javaType="java.lang.Double"/>
+            <arg column="sharpe" javaType="java.lang.Double"/>
+            <arg column="win_rate" javaType="java.lang.Double"/>
+            <arg column="turnover" javaType="java.lang.Double"/>
+            <arg column="created_at" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.lang.String"/>
+            <arg column="finished_at" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO backtest_task (strategy_id, strategy_name, strategy_hash, engine_version,
+                                   params_json, status, progress_done, progress_total,
+                                   data_through, benchmark_id, initial_capital, created_at)
+        VALUES (#{strategyId}, #{strategyName}, #{strategyHash}, #{engineVersion},
+                #{paramsJson}, #{status}, #{progressDone}, #{progressTotal},
+                #{dataThrough}, #{benchmarkId}, #{initialCapital}, #{createdAt})
+    </insert>
+
+    <select id="lastInsertId" resultType="java.lang.Long">
+        SELECT last_insert_rowid()
+    </select>
+
+    <select id="findById" resultMap="BacktestTaskMap">
+        SELECT * FROM backtest_task WHERE id = #{id}
+    </select>
+
+    <select id="findRecent" resultMap="BacktestTaskMap">
+        SELECT * FROM backtest_task ORDER BY id DESC LIMIT #{limit}
+    </select>
+
+    <update id="markRunning">
+        UPDATE backtest_task
+        SET status = 'RUNNING', progress_done = 0, progress_total = #{progressTotal},
+            started_at = #{startedAt}, message = NULL
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateProgressTotal">
+        UPDATE backtest_task SET progress_total = #{progressTotal} WHERE id = #{id}
+    </update>
+
+    <update id="updateProgress">
+        UPDATE backtest_task SET progress_done = #{progressDone} WHERE id = #{id}
+    </update>
+
+    <update id="markSuccess">
+        UPDATE backtest_task
+        SET status = 'SUCCESS', progress_done = #{progressDone},
+            final_nav = #{finalNav}, cumulative_return = #{cumulativeReturn},
+            annual_return = #{annualReturn}, max_drawdown = #{maxDrawdown},
+            sharpe = #{sharpe}, win_rate = #{winRate}, turnover = #{turnover},
+            finished_at = #{finishedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="markFailed">
+        UPDATE backtest_task
+        SET status = 'FAILED', message = #{message}, finished_at = #{finishedAt}
+        WHERE id = #{id}
+    </update>
+
+</mapper>

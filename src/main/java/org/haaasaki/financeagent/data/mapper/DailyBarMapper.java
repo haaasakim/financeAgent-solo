@@ -10,6 +10,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.model.DailyClose;
+import org.haaasaki.financeagent.data.model.InstrumentFirstBar;
 
 /**
  * 日K行情 Mapper。
@@ -51,6 +52,15 @@ public interface DailyBarMapper {
     }
 
     Optional<LocalDate> findMaxTradeDate(@Param("instrumentId") String instrumentId);
+
+    /** 全库最大交易日，回测运行时的数据快照标识。 */
+    Optional<LocalDate> findGlobalMaxTradeDate();
+
+    /** 某标的的全部交易日，升序。回测用它回填交易日历。 */
+    List<LocalDate> findTradeDates(@Param("instrumentId") String instrumentId);
+
+    /** 全部标的的首根日K日期，供回测排除上市不足 5 个交易日的标的。 */
+    List<InstrumentFirstBar> findFirstTradeDates();
 
     Optional<LocalDate> findMinTradeDate(@Param("instrumentId") String instrumentId);
 

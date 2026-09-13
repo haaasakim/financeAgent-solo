@@ -30,52 +30,63 @@ public class FactorRegistry {
         List<FactorDefinition> list = List.of(
                 // 基础
                 new FactorDefinition("excludeSt", "基础", "非 ST", FactorKind.BOOLEAN,
-                        "CASE WHEN i.name LIKE '%ST%' THEN 0 ELSE 1 END", "", true),
+                        "CASE WHEN i.name LIKE '%ST%' THEN 0 ELSE 1 END",
+                        "CASE WHEN i.name LIKE '%ST%' THEN 0 ELSE 1 END",
+                        "", true),
                 new FactorDefinition("tradable", "基础", "非停牌（最近在交易）", FactorKind.BOOLEAN,
                         "CASE WHEN (SELECT MAX(d.trade_date) FROM daily_bar d"
                                 + " WHERE d.instrument_id = i.instrument_id)"
                                 + " = (SELECT MAX(trade_date) FROM daily_bar) THEN 1 ELSE 0 END",
+                        "CASE WHEN EXISTS (SELECT 1 FROM daily_bar d"
+                                + " WHERE d.instrument_id = i.instrument_id"
+                                + " AND d.trade_date = f.trade_date) THEN 1 ELSE 0 END",
                         "", true),
                 new FactorDefinition("listedDays", "基础", "上市天数", FactorKind.NUMBER,
                         "CAST(julianday('now', 'localtime') - julianday(i.listed_at) AS INTEGER)",
+                        "CAST(julianday(f.trade_date) - julianday(i.listed_at) AS INTEGER)",
                         "天", true),
 
-                // 估值（快照）
+                // 估值（快照为最新截面；历史截面来自 valuation_daily，见 WI-007）
                 new FactorDefinition("peTtm", "估值", "PE-TTM", FactorKind.NUMBER,
-                        "ms.pe_ttm", "倍", true),
+                        "ms.pe_ttm", "v.pe_ttm", "倍", true),
                 new FactorDefinition("pb", "估值", "PB", FactorKind.NUMBER,
-                        "ms.pb", "倍", true),
+                        "ms.pb", "v.pb_mrq", "倍", true),
                 new FactorDefinition("dividendYield", "估值", "股息率", FactorKind.NUMBER,
-                        null, "%", false),
+                        null, null, "%", false),
 
                 // 质量 / 成长（财务，占位）
                 new FactorDefinition("roeTtm", "质量", "ROE-TTM", FactorKind.NUMBER,
-                        null, "%", false),
+                        null, null, "%", false),
                 new FactorDefinition("debtRatio", "质量", "资产负债率", FactorKind.NUMBER,
-                        null, "%", false),
+                        null, null, "%", false),
                 new FactorDefinition("revenueYoy", "成长", "营收同比", FactorKind.NUMBER,
-                        null, "%", false),
+                        null, null, "%", false),
                 new FactorDefinition("profitYoy", "成长", "净利同比", FactorKind.NUMBER,
-                        null, "%", false),
+                        null, null, "%", false),
 
-                // 趋势（factor_daily，最新一行）
+                // 趋势（factor_daily）
                 new FactorDefinition("return20", "趋势", "20 日收益", FactorKind.NUMBER,
-                        "(f.return_20 * 100)", "%", true),
+                        "(f.return_20 * 100)", "(f.return_20 * 100)", "%", true),
                 new FactorDefinition("return60", "趋势", "60 日收益", FactorKind.NUMBER,
-                        "(f.return_60 * 100)", "%", true),
+                        "(f.return_60 * 100)", "(f.return_60 * 100)", "%", true),
                 new FactorDefinition("aboveMa60", "趋势", "站上 MA60", FactorKind.BOOLEAN,
                         "CASE WHEN (SELECT d.close FROM daily_bar d"
                                 + " WHERE d.instrument_id = i.instrument_id"
                                 + " ORDER BY d.trade_date DESC LIMIT 1) > f.ma60 THEN 1 ELSE 0 END",
+                        "CASE WHEN (SELECT d.close FROM daily_bar d"
+                                + " WHERE d.instrument_id = i.instrument_id"
+                                + " AND d.trade_date = f.trade_date) > f.ma60 THEN 1 ELSE 0 END",
                         "", true),
                 new FactorDefinition("ma20GtMa60", "趋势", "MA20 > MA60", FactorKind.BOOLEAN,
-                        "CASE WHEN f.ma20 > f.ma60 THEN 1 ELSE 0 END", "", true),
+                        "CASE WHEN f.ma20 > f.ma60 THEN 1 ELSE 0 END",
+                        "CASE WHEN f.ma20 > f.ma60 THEN 1 ELSE 0 END",
+                        "", true),
 
                 // 风险
                 new FactorDefinition("volatility20", "风险", "20 日波动率", FactorKind.NUMBER,
-                        "(f.volatility_20 * 100)", "%", true),
+                        "(f.volatility_20 * 100)", "(f.volatility_20 * 100)", "%", true),
                 new FactorDefinition("pctFrom52wHigh", "风险", "距 52 周高点", FactorKind.NUMBER,
-                        "(f.pct_from_52w_high * 100)", "%", true));
+                        "(f.pct_from_52w_high * 100)", "(f.pct_from_52w_high * 100)", "%", true));
 
         this.definitions = List.copyOf(list);
         Map<String, FactorDefinition> map = new LinkedHashMap<>();
