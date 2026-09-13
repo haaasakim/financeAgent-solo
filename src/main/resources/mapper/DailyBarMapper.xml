@@ -84,6 +84,18 @@
         ORDER BY trade_date
     </select>
 
+    <select id="findRecent" resultMap="DailyBarMap">
+        SELECT <include refid="columns"/>
+        FROM (
+            SELECT <include refid="columns"/>
+            FROM daily_bar
+            WHERE instrument_id = #{instrumentId}
+            ORDER BY trade_date DESC
+            LIMIT #{limit}
+        )
+        ORDER BY trade_date
+    </select>
+
     <select id="findCloseList" resultMap="DailyCloseMap">
         SELECT trade_date, close
         FROM daily_bar

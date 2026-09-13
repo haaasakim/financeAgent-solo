@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.FactorDailyMapper">
+
+    <!-- 构造器映射，参数顺序必须与 FactorDaily record 头部一致；因子列全部可空 -->
+    <resultMap id="FactorDailyMap" type="org.haaasaki.financeagent.data.model.FactorDaily">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <idArg column="trade_date" javaType="java.time.LocalDate"/>
+            <arg column="ma5" javaType="java.lang.Double"/>
+            <arg column="ma10" javaType="java.lang.Double"/>
+            <arg column="ma20" javaType="java.lang.Double"/>
+            <arg column="ma60" javaType="java.lang.Double"/>
+            <arg column="macd_dif" javaType="java.lang.Double"/>
+            <arg column="macd_dea" javaType="java.lang.Double"/>
+            <arg column="macd_hist" javaType="java.lang.Double"/>
+            <arg column="rsi6" javaType="java.lang.Double"/>
+            <arg column="rsi12" javaType="java.lang.Double"/>
+            <arg column="rsi24" javaType="java.lang.Double"/>
+            <arg column="return_20" javaType="java.lang.Double"/>
+            <arg column="return_60" javaType="java.lang.Double"/>
+            <arg column="volatility_20" javaType="java.lang.Double"/>
+            <arg column="pct_from_52w_high" javaType="java.lang.Double"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertBatch">
+        INSERT INTO factor_daily (instrument_id, trade_date,
+                                  ma5, ma10, ma20, ma60,
+                                  macd_dif, macd_dea, macd_hist,
+                                  rsi6, rsi12, rsi24,
+                                  return_20, return_60, volatility_20, pct_from_52w_high,
+                                  data_status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.instrumentId}, #{it.tradeDate},
+            #{it.ma5}, #{it.ma10}, #{it.ma20}, #{it.ma60},
+            #{it.macdDif}, #{it.macdDea}, #{it.macdHist},
+            #{it.rsi6}, #{it.rsi12}, #{it.rsi24},
+            #{it.return20}, #{it.return60}, #{it.volatility20}, #{it.pctFrom52wHigh},
+            'ACCEPTED',
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (instrument_id, trade_date) DO UPDATE SET
+        ma5               = excluded.ma5,
+        ma10              = excluded.ma10,
+        ma20              = excluded.ma20,
+        ma60              = excluded.ma60,
+        macd_dif          = excluded.macd_dif,
+        macd_dea          = excluded.macd_dea,
+        macd_hist         = excluded.macd_hist,
+        rsi6              = excluded.rsi6,
+        rsi12             = excluded.rsi12,
+        rsi24             = excluded.rsi24,
+        return_20         = excluded.return_20,
+        return_60         = excluded.return_60,
+        volatility_20     = excluded.volatility_20,
+        pct_from_52w_high = excluded.pct_from_52w_high,
+        data_status       = excluded.data_status,
+        updated_at        = excluded.updated_at
+    </insert>
+
+    <sql id="columns">
+        instrument_id, trade_date, ma5, ma10, ma20, ma60,
+        macd_dif, macd_dea, macd_hist, rsi6, rsi12, rsi24,
+        return_20, return_60, volatility_20, pct_from_52w_high
+    </sql>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM factor_daily
+    </select>
+
+    <select id="countByInstrument" resultType="long">
+        SELECT COUNT(*) FROM factor_daily WHERE instrument_id = #{instrumentId}
+    </select>
+
+    <select id="countDistinctInstruments" resultType="long">
+        SELECT COUNT(DISTINCT instrument_id) FROM factor_daily
+    </select>
+
+    <select id="findInstrumentIdsWithFactors" resultType="java.lang.String">
+        SELECT DISTINCT instrument_id FROM factor_daily
+    </select>
+
+    <select id="findRecent" resultMap="FactorDailyMap">
+        SELECT <include refid="columns"/>
+        FROM factor_daily
+        WHERE instrument_id = #{instrumentId}
+        ORDER BY trade_date DESC
+        LIMIT #{limit}
+    </select>
+
+</mapper>

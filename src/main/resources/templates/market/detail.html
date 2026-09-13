@@ -94,6 +94,7 @@
                    th:classappend="${r == detail.range} ? 'active'"
                    th:href="@{/market/stock/{id}(id=${ins.instrumentId},range=${r.key()})}"
                    th:text="${r.label}">近 6 月</a>
+                <a class="btn btn-sm" th:href="@{/market/factors(instrumentId=${ins.instrumentId})}">技术因子</a>
             </div>
         </div>
 

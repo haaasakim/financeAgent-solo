@@ -21,10 +21,14 @@ import org.springframework.stereotype.Component;
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.missing --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.snapshot --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.indexes --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--factor.init --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--factor.update --spring.main.web-application-type=none"
  * </pre>
  *
  * <p>{@code --sync.init=N} 中 N 表示最多处理 N 只标的（小样本验证用），0 或省略值表示全量。
  * {@code --sync.snapshot} 同步全市场快照，{@code --sync.indexes} 同步配置中的指数。
+ * {@code --factor.init} 全量回填因子，{@code --factor.update} 增量重算；
+ * {@code --sync.incremental} 成功后会自动衔接一次因子增量。
  *
  * <p>顺序必须晚于 {@link org.haaasaki.financeagent.data.migration.DatabaseMigrator}，
  * 否则表还没建好。
@@ -36,9 +40,12 @@ public class SyncCommandLineRunner implements ApplicationRunner {
     private static final Logger log = LoggerFactory.getLogger(SyncCommandLineRunner.class);
 
     private final MarketDataSyncService syncService;
+    private final FactorComputeService factorComputeService;
 
-    public SyncCommandLineRunner(MarketDataSyncService syncService) {
+    public SyncCommandLineRunner(MarketDataSyncService syncService,
+                                 FactorComputeService factorComputeService) {
         this.syncService = syncService;
+        this.factorComputeService = factorComputeService;
     }
 
     @Override
@@ -55,6 +62,9 @@ public class SyncCommandLineRunner implements ApplicationRunner {
         if (args.containsOption("sync.incremental")) {
             log.info("命令行触发：增量同步日K");
             report(syncService.syncDailyIncremental());
+            // 因子依赖日K，增量同步后自动重算最近窗口，避免用户忘记
+            log.info("自动衔接：增量同步后重算因子");
+            report(factorComputeService.updateFactors());
         }
         if (args.containsOption("sync.missing")) {
             log.info("命令行触发：补拉缺失标的的日K");
@@ -67,6 +77,14 @@ public class SyncCommandLineRunner implements ApplicationRunner {
         if (args.containsOption("sync.indexes")) {
             log.info("命令行触发：同步指数");
             report(syncService.syncIndexes());
+        }
+        if (args.containsOption("factor.init")) {
+            log.info("命令行触发：全量回填因子");
+            report(factorComputeService.initializeFactors());
+        }
+        if (args.containsOption("factor.update")) {
+            log.info("命令行触发：增量重算因子");
+            report(factorComputeService.updateFactors());
         }
     }
 

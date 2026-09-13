@@ -72,6 +72,15 @@
         ORDER BY i.instrument_id
     </select>
 
+    <select id="findWithDailyBars" resultMap="InstrumentMap">
+        SELECT i.instrument_id, i.instrument_type, i.exchange, i.code, i.name, i.board,
+               i.currency, i.timezone, i.listed_at, i.delisted_at, i.status
+        FROM instrument i
+        WHERE i.status &lt;&gt; 'DELISTED'
+          AND EXISTS (SELECT 1 FROM daily_bar b WHERE b.instrument_id = i.instrument_id)
+        ORDER BY i.instrument_id
+    </select>
+
     <select id="findByType" resultMap="InstrumentMap">
         SELECT <include refid="columns"/>
         FROM instrument

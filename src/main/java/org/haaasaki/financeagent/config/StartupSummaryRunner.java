@@ -35,7 +35,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
     private static final String THIN = "------------------------------------------------------------";
     private static final String SYNC_HINT =
             " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.missing（补缺失）\n"
-                    + "              --sync.incremental | --sync.snapshot（快照）| --sync.indexes（指数）";
+                    + "              --sync.incremental | --sync.snapshot（快照）| --sync.indexes（指数）\n"
+                    + "              --factor.init（因子回填）| --factor.update（因子增量）";
 
     private final DataStatisticsService statisticsService;
     private final ApplicationContext applicationContext;

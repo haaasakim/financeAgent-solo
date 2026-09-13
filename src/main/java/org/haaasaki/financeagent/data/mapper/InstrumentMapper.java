@@ -28,6 +28,9 @@ public interface InstrumentMapper {
     /** 当前没有任何日K的标的（不含退市），按 instrument_id 升序。用于失败后的断点续传。 */
     List<Instrument> findWithoutDailyBars();
 
+    /** 已有日K的标的（不含退市），按 instrument_id 升序。因子计算只针对这些标的。 */
+    List<Instrument> findWithDailyBars();
+
     List<Instrument> findByType(@Param("instrumentType") String instrumentType);
 
     long count();

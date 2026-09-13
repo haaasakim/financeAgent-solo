@@ -34,15 +34,15 @@ open http://localhost:8080
 首次运行需要初始化数据（命令行触发，执行完自动退出）：
 
 ```bash
-# 标的字典 → 10 年日K → 市场快照 → 指数（约 2.6 万次请求，耗时约 1.5 小时，建议夜间执行）
-java -jar target/financeAgent-*.jar --sync.instruments --sync.init=0 --sync.snapshot --sync.indexes \
+# 标的字典 → 10 年日K → 市场快照 → 指数 → 技术因子（日K约 2.6 万次请求，建议夜间执行）
+java -jar target/financeAgent-*.jar --sync.instruments --sync.init=0 --sync.snapshot --sync.indexes --factor.init \
      --spring.main.web-application-type=none
 
-# 之后每天收盘后增量更新
+# 之后每天收盘后增量更新（--sync.incremental 成功后会自动衔接一次 --factor.update）
 java -jar target/financeAgent-*.jar --sync.incremental --sync.snapshot --spring.main.web-application-type=none
 ```
 
-M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，用 `--sync.missing` 只补拉没有日K的标的（可重复执行直到缺失为 0）。
+M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，用 `--sync.missing` 只补拉没有日K的标的（可重复执行直到缺失为 0）。因子任务可单独触发：`--factor.init` 全量回填，`--factor.update` 增量重算。
 
 ## 项目结构
 

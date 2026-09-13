@@ -13,7 +13,6 @@ import org.haaasaki.financeagent.config.MarketProperties;
 import org.haaasaki.financeagent.data.mapper.DailyBarMapper;
 import org.haaasaki.financeagent.data.mapper.InstrumentMapper;
 import org.haaasaki.financeagent.data.mapper.MarketSnapshotMapper;
-import org.haaasaki.financeagent.data.mapper.SyncLogMapper;
 import org.haaasaki.financeagent.data.model.DailyBar;
 import org.haaasaki.financeagent.data.model.Instrument;
 import org.haaasaki.financeagent.data.model.InstrumentSnapshot;
@@ -58,7 +57,7 @@ public class MarketDataSyncService {
 
     private final InstrumentMapper instrumentMapper;
     private final DailyBarMapper dailyBarMapper;
-    private final SyncLogMapper syncLogMapper;
+    private final SyncLogRecorder syncLogRecorder;
     private final MarketSnapshotMapper marketSnapshotMapper;
     private final QuoteProvider quoteProvider;
     private final SnapshotProvider snapshotProvider;
@@ -71,7 +70,7 @@ public class MarketDataSyncService {
     public MarketDataSyncService(
             InstrumentMapper instrumentMapper,
             DailyBarMapper dailyBarMapper,
-            SyncLogMapper syncLogMapper,
+            SyncLogRecorder syncLogRecorder,
             MarketSnapshotMapper marketSnapshotMapper,
             QuoteProvider quoteProvider,
             SnapshotProvider snapshotProvider,
@@ -82,7 +81,7 @@ public class MarketDataSyncService {
             @Value("${finance.sync.snapshot-min-total:5000}") int snapshotMinTotal) {
         this.instrumentMapper = instrumentMapper;
         this.dailyBarMapper = dailyBarMapper;
-        this.syncLogMapper = syncLogMapper;
+        this.syncLogRecorder = syncLogRecorder;
         this.marketSnapshotMapper = marketSnapshotMapper;
         this.quoteProvider = quoteProvider;
         this.snapshotProvider = snapshotProvider;
@@ -108,12 +107,12 @@ public class MarketDataSyncService {
             }
 
             String message = "股票 + ETF 共 " + written + " 只";
-            recordSyncLog(taskName, snapshotProvider.name(), "SUCCESS",
+            syncLogRecorder.record(taskName, snapshotProvider.name(), "SUCCESS",
                     instruments.size(), written, 0, message, startedAt);
             log.info("标的字典同步完成：{}", message);
             return new SyncResult(taskName, "SUCCESS", instruments.size(), written, 0, message);
         } catch (RuntimeException e) {
-            recordSyncLog(taskName, snapshotProvider.name(), "FAILED", 0, 0, 0, e.getMessage(), startedAt);
+            syncLogRecorder.record(taskName, snapshotProvider.name(), "FAILED", 0, 0, 0, e.getMessage(), startedAt);
             throw e;
         }
     }
@@ -188,7 +187,7 @@ public class MarketDataSyncService {
 
         String status = fail == 0 ? "SUCCESS" : (success == 0 ? "FAILED" : "PARTIAL");
         String message = summarize(errors);
-        recordSyncLog(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
+        syncLogRecorder.record(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
         log.info("日K同步完成[{}]：总计 {}，成功 {}，失败 {}", taskName, targets.size(), success, fail);
         return new SyncResult(taskName, status, targets.size(), success, fail, message);
     }
@@ -241,7 +240,7 @@ public class MarketDataSyncService {
         String status = fail == 0 ? "SUCCESS" : (success == 0 ? "FAILED" : "PARTIAL");
         String message = "成功 " + success + "，其中除权重拉 " + revised + "；失败 " + fail
                 + (errors.isEmpty() ? "" : "；" + summarize(errors));
-        recordSyncLog(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
+        syncLogRecorder.record(taskName, quoteProvider.name(), status, targets.size(), success, fail, message, startedAt);
         log.info("日K增量完成：{}", message);
         return new SyncResult(taskName, status, targets.size(), success, fail, message);
     }
@@ -293,12 +292,12 @@ public class MarketDataSyncService {
             });
 
             String message = "股票 " + stocks.size() + " + ETF " + etfs.size() + " = " + rows.size() + " 条";
-            recordSyncLog(taskName, snapshotProvider.name(), "SUCCESS",
+            syncLogRecorder.record(taskName, snapshotProvider.name(), "SUCCESS",
                     fetchedCount, rows.size(), 0, message, startedAt);
             log.info("市场快照同步完成：{}", message);
             return new SyncResult(taskName, "SUCCESS", fetchedCount, rows.size(), 0, message);
         } catch (RuntimeException e) {
-            recordSyncLog(taskName, snapshotProvider.name(), "FAILED",
+            syncLogRecorder.record(taskName, snapshotProvider.name(), "FAILED",
                     fetchedCount, 0, fetchedCount, e.getMessage(), startedAt);
             log.warn("市场快照同步失败：{}", e.getMessage());
             throw e;
@@ -394,7 +393,7 @@ public class MarketDataSyncService {
         String status = fail == 0 ? "SUCCESS" : (success == 0 ? "FAILED" : "PARTIAL");
         String message = "成功 " + success + "，失败 " + fail
                 + (errors.isEmpty() ? "" : "；" + summarize(errors));
-        recordSyncLog(taskName, quoteProvider.name(), status, indexes.size(), success, fail, message, startedAt);
+        syncLogRecorder.record(taskName, quoteProvider.name(), status, indexes.size(), success, fail, message, startedAt);
         log.info("指数同步完成：{}", message);
         return new SyncResult(taskName, status, indexes.size(), success, fail, message);
     }
@@ -447,11 +446,6 @@ public class MarketDataSyncService {
         for (List<DailyBar> batch : partition(all, batchSize)) {
             dailyBarMapper.upsertBatch(batch);
         }
-    }
-
-    private void recordSyncLog(String taskName, String provider, String status,
-                               int total, int success, int fail, String message, LocalDateTime startedAt) {
-        syncLogMapper.insert(taskName, provider, status, total, success, fail, message, startedAt.toString());
     }
 
     private List<Instrument> toInstruments(List<InstrumentSnapshot> snapshots, String instrumentType) {

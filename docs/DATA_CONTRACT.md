@@ -68,9 +68,19 @@ erDiagram
         text instrument_id PK
         date trade_date PK
         real ma5
+        real ma10
         real ma20
+        real ma60
         real macd_dif
-        text more_factors
+        real macd_dea
+        real macd_hist
+        real rsi6
+        real rsi12
+        real rsi24
+        real return_20
+        real return_60
+        real volatility_20
+        real pct_from_52w_high
     }
 ```
 
@@ -98,6 +108,10 @@ erDiagram
 - **资金账户余额、费用、持仓市值** → `BigDecimal`（涉及金额累加，必须精确）
 
 禁止用 `float`。禁止用 `double` 做资金累加。
+
+**因子口径**：`factor_daily` 的技术指标定义（窗口、公式、缺失语义）以
+`docs/work-items/WI-003-指标计算与因子表.md` 第 2.2 节为准；全部基于前复权收盘价，
+按标的自身 bar 序列滚动（不对齐日历），回看不足的列保持 NULL。
 
 ## 3. 复权
 

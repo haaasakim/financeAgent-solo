@@ -26,6 +26,15 @@ public interface DailyBarMapper {
                              @Param("from") LocalDate from,
                              @Param("to") LocalDate to);
 
+    /**
+     * 最近 {@code limit} 根日K，按交易日升序。
+     *
+     * <p>供因子增量重算切片使用：需要一段「输出窗口 + 最长回看」的历史，
+     * 且必须保证升序（因子函数依赖序列顺序）。
+     */
+    List<DailyBar> findRecent(@Param("instrumentId") String instrumentId,
+                              @Param("limit") int limit);
+
     /** 只取日期与收盘价，供除权检测比对使用。 */
     List<DailyClose> findCloseList(@Param("instrumentId") String instrumentId,
                                    @Param("from") LocalDate from,
