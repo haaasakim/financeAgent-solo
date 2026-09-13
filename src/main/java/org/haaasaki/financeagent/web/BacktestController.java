@@ -210,6 +210,9 @@ public class BacktestController {
         model.addAttribute("benchmarkSeries", daily.stream().map(BacktestDaily::benchmarkNav).toList());
         model.addAttribute("drawdownSeries", daily.stream()
                 .map(row -> row.drawdown() * 100).toList());
+        // 持仓比 = 持仓市值 / 净值 × 100（%）；净值为 0 时缺失，曲线断开
+        model.addAttribute("positionRatioSeries", daily.stream()
+                .map(row -> row.nav() == 0 ? null : row.marketValue() / row.nav() * 100).toList());
         if (!daily.isEmpty()) {
             BacktestDaily last = daily.get(daily.size() - 1);
             model.addAttribute("excessReturn",

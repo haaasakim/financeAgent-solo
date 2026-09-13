@@ -112,7 +112,9 @@ class BacktestControllerTest {
                 .andExpect(content().string(containsString("name=\"topN\" value=\"30\"")))
                 .andExpect(content().string(containsString("name=\"stopLossPct\" value=\"12\"")))
                 .andExpect(content().string(containsString("name=\"timeStopDays\" value=\"40\"")))
-                .andExpect(content().string(containsString("id=\"bt-result\"")));
+                .andExpect(content().string(containsString("id=\"bt-result\"")))
+                .andExpect(content().string(containsString("id=\"bt-position-chart\"")))
+                .andExpect(content().string(containsString("持仓比曲线")));
     }
 
     @Test

@@ -187,6 +187,10 @@
       charts.btDd.dispose();
       charts.btDd = null;
     }
+    if (charts.btPosition) {
+      charts.btPosition.dispose();
+      charts.btPosition = null;
+    }
 
     var primary = cssVar('--primary') || '#185FA5';
     var text3 = cssVar('--text-3') || '#888780';
@@ -247,6 +251,41 @@
             name: '回撤', type: 'line', data: data.drawdown, symbol: 'none',
             lineStyle: { width: 1, color: down },
             areaStyle: { color: down, opacity: 0.12 }
+          }
+        ]
+      });
+    }
+
+    var posEl = document.getElementById('bt-position-chart');
+    if (posEl) {
+      charts.btPosition = echarts.init(posEl);
+      charts.btPosition.setOption({
+        animation: false,
+        tooltip: {
+          trigger: 'axis',
+          valueFormatter: function (v) {
+            return v == null ? '--' : (Math.round(v * 10) / 10) + '%';
+          }
+        },
+        grid: { left: 64, right: 20, top: 16, bottom: 28 },
+        xAxis: {
+          type: 'category',
+          data: data.dates,
+          axisLabel: { color: text3, fontSize: 10 },
+          axisLine: { lineStyle: { color: grid } }
+        },
+        yAxis: {
+          type: 'value',
+          min: 0,
+          max: 100,
+          axisLabel: { color: text3, fontSize: 10, formatter: '{value}%' },
+          splitLine: { lineStyle: { color: grid } }
+        },
+        series: [
+          {
+            name: '持仓比', type: 'line', data: data.positionRatio, symbol: 'none',
+            lineStyle: { width: 1, color: primary },
+            areaStyle: { color: primary, opacity: 0.12 }
           }
         ]
       });

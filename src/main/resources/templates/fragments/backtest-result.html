@@ -57,6 +57,11 @@
             <div class="card-title">回撤曲线</div>
         </div>
         <div id="bt-dd-chart" class="bt-chart bt-chart-sm"></div>
+        <div class="card-hd" style="margin-top:12px">
+            <div class="card-title">持仓比曲线</div>
+            <div class="card-sub">持仓市值 / 净值</div>
+        </div>
+        <div id="bt-position-chart" class="bt-chart bt-chart-sm"></div>
     </div>
 
     <div class="card">
@@ -72,7 +77,8 @@
             dates: /*[[${dates}]]*/ [],
             nav: /*[[${navSeries}]]*/ [],
             benchmark: /*[[${benchmarkSeries}]]*/ [],
-            drawdown: /*[[${drawdownSeries}]]*/ []
+            drawdown: /*[[${drawdownSeries}]]*/ [],
+            positionRatio: /*[[${positionRatioSeries}]]*/ []
         };
         if (window.initBacktestCharts) {
             initBacktestCharts();
