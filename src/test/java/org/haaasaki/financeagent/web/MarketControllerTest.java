@@ -1,5 +1,6 @@
 package org.haaasaki.financeagent.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,12 +17,17 @@ import org.haaasaki.financeagent.data.model.MarketSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 /**
  * 市场页面渲染测试：验证模板与片段能真实渲染，而非只测 Controller 返回值。
@@ -114,5 +120,26 @@ class MarketControllerTest {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("最近同步记录")));
+    }
+
+    @Test
+    @DisplayName("请求日志：记录非静态请求的方法、参数、状态与耗时，静态资源不记")
+    void requestLoggingFilterWritesAccessLog() throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(RequestLoggingFilter.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            mockMvc.perform(get("/market").queryParam("sort", "amount")).andExpect(status().isOk());
+            mockMvc.perform(get("/css/app.css")).andExpect(status().isOk());
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        assertThat(appender.list)
+                .anyMatch(event -> event.getFormattedMessage().contains("GET /market?sort=amount")
+                        && event.getFormattedMessage().contains("-> 200"));
+        assertThat(appender.list)
+                .noneMatch(event -> event.getFormattedMessage().contains("/css/"));
     }
 }
