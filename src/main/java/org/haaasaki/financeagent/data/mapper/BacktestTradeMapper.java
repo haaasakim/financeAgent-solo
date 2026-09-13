@@ -21,4 +21,7 @@ public interface BacktestTradeMapper {
                                  @Param("limit") int limit);
 
     long countByTask(@Param("taskId") long taskId);
+
+    /** 任务的全部成交订单，按 orderNo 升序；供「按标的配对」使用。 */
+    List<BacktestTrade> findFilledByTask(@Param("taskId") long taskId);
 }

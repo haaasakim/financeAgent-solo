@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -21,7 +22,9 @@ import org.haaasaki.financeagent.data.mapper.DailyBarMapper;
 import org.haaasaki.financeagent.data.mapper.InstrumentMapper;
 import org.haaasaki.financeagent.data.mapper.StrategyMapper;
 import org.haaasaki.financeagent.data.mapper.ValuationDailyMapper;
+import org.haaasaki.financeagent.data.model.BacktestDaily;
 import org.haaasaki.financeagent.data.model.BacktestTask;
+import org.haaasaki.financeagent.data.model.BacktestTrade;
 import org.haaasaki.financeagent.data.model.Instrument;
 import org.haaasaki.financeagent.data.model.Strategy;
 import org.haaasaki.financeagent.screener.ScreenerService;
@@ -44,6 +47,7 @@ public class BacktestService {
     public static final String ENGINE_VERSION = "1";
     private static final int RECENT_LIMIT = 10;
     public static final int TRADE_PAGE_SIZE = 50;
+    public static final int TRIP_PAGE_SIZE = 50;
 
     private static final int MAX_TOP_N = 100;
     private static final BigDecimal MIN_CAPITAL = new BigDecimal("1000");
@@ -220,6 +224,17 @@ public class BacktestService {
                 .orElseThrow(() -> new BusinessException("回测任务不存在"));
     }
 
+    /** 任务保存的回测参数，用于历史回测入参回显；任务不存在或参数解析失败返回空。 */
+    public java.util.Optional<BacktestParams> params(long taskId) {
+        return backtestTaskMapper.findById(taskId).flatMap(task -> {
+            try {
+                return java.util.Optional.of(objectMapper.readValue(task.paramsJson(), BacktestParams.class));
+            } catch (JsonProcessingException e) {
+                return java.util.Optional.empty();
+            }
+        });
+    }
+
     public List<BacktestTask> recentTasks() {
         return backtestTaskMapper.findRecent(RECENT_LIMIT);
     }
@@ -243,11 +258,32 @@ public class BacktestService {
             throw new BusinessException("任务尚未成功完成，无法查看结果");
         }
         int currentPage = Math.max(1, page);
-        List<org.haaasaki.financeagent.data.model.BacktestTrade> trades =
+        List<BacktestTrade> trades =
                 backtestTradeMapper.findPage(taskId,
                         (currentPage - 1) * TRADE_PAGE_SIZE, TRADE_PAGE_SIZE);
         long total = backtestTradeMapper.countByTask(taskId);
         return new BacktestResultView(task, backtestDailyMapper.findByTask(taskId),
                 trades, total, currentPage, TRADE_PAGE_SIZE);
+    }
+
+    /** 按标的配对的往返记录视图；与订单流水同一成功状态校验与分页口径，支持白名单排序。 */
+    public RoundTripView roundTrips(long taskId, int page, RoundTripSort sort, boolean desc) {
+        BacktestTask task = task(taskId);
+        if (!BacktestTask.STATUS_SUCCESS.equals(task.status())) {
+            throw new BusinessException("任务尚未成功完成，无法查看结果");
+        }
+        List<BacktestTrade> filled = backtestTradeMapper.findFilledByTask(taskId);
+        List<LocalDate> tradingDates = backtestDailyMapper.findByTask(taskId).stream()
+                .map(BacktestDaily::tradeDate)
+                .toList();
+        List<RoundTrip> all = new ArrayList<>(TradePairing.pair(filled, tradingDates));
+        all.sort(sort.comparator(desc));
+
+        int currentPage = Math.max(1, page);
+        int offset = (currentPage - 1) * TRIP_PAGE_SIZE;
+        List<RoundTrip> rows = offset >= all.size()
+                ? List.of()
+                : List.copyOf(all.subList(offset, Math.min(offset + TRIP_PAGE_SIZE, all.size())));
+        return new RoundTripView(task, rows, all.size(), currentPage, TRIP_PAGE_SIZE, sort, desc);
     }
 }

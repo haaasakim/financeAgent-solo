@@ -1,0 +1,68 @@
+<!--
+  按标的配对视图：每个标的的「买入 → 卖出」往返一行（多次进出多行），
+  期末仍持有的显示买入信息与「持有中」；未成交订单在「订单流水」中查看。
+  表头由 RoundTripSort 白名单生成，点击切换排序（同列翻转方向，可空列空值恒最后）。
+  数据由 BacktestService.roundTrips 配对、排序与分页。
+-->
+<div id="bt-trades" th:fragment="trips" xmlns:th="http://www.thymeleaf.org">
+
+    <div th:replace="~{fragments/backtest-trade-tabs :: tabs('trips', ${tripView.task.id})}"></div>
+
+    <div class="pager" style="padding-top:0;padding-bottom:10px">
+        <span th:text="|共 ${tripView.total} 笔往返（含持有中）|">--</span>
+        <div class="pager-btns">
+            <button class="btn btn-sm" th:disabled="${!tripView.hasPrev()}"
+                    th:hx-get="@{/fragments/backtest/{id}/trips(id=${tripView.task.id},page=${tripView.page - 1},sort=${tripView.sort().key()},dir=${tripView.desc()} ? 'desc' : 'asc')}"
+                    hx-target="#bt-trades" hx-swap="outerHTML">上一页</button>
+            <span class="card-sub" th:text="|第 ${tripView.page} / ${tripView.totalPages()} 页|">--</span>
+            <button class="btn btn-sm" th:disabled="${!tripView.hasNext()}"
+                    th:hx-get="@{/fragments/backtest/{id}/trips(id=${tripView.task.id},page=${tripView.page + 1},sort=${tripView.sort().key()},dir=${tripView.desc()} ? 'desc' : 'asc')}"
+                    hx-target="#bt-trades" hx-swap="outerHTML">下一页</button>
+        </div>
+    </div>
+
+    <div class="table-scroll">
+        <table>
+            <thead>
+            <tr>
+                <th th:each="col : ${sortFields}"
+                    th:classappend="${(col.numeric() ? 'num ' : '') + (tripView.isSortedBy(col) ? 'sorted' : '')}">
+                    <a th:hx-get="@{/fragments/backtest/{id}/trips(id=${tripView.task.id},page=1,sort=${col.key()},dir=${tripView.nextDirection(col)})}"
+                       hx-target="#bt-trades" hx-swap="outerHTML">
+                        <span th:text="${col.label()}">列</span>
+                        <span class="arrow"
+                              th:text="${tripView.isSortedBy(col) ? (tripView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
+                    </a>
+                </th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:if="${#lists.isEmpty(tripView.trips)}">
+                <td colspan="11" class="empty">区间内没有成交</td>
+            </tr>
+            <tr th:each="r : ${tripView.trips}">
+                <td class="code" th:text="${r.code}">000001</td>
+                <td>
+                    <a class="name" th:href="@{/market/stock/{id}(id=${r.instrumentId})}"
+                       th:text="${r.name}">标的</a>
+                </td>
+                <td th:text="${r.buyDate}">--</td>
+                <td class="num" th:text="${#numbers.formatDecimal(r.buyPrice, 1, 3)}">--</td>
+                <td class="num" th:text="${#numbers.formatDecimal(r.buyAmount, 1, 2)}">--</td>
+                <td th:classappend="${r.sellDate == null} ? 'card-sub'"
+                    th:text="${r.sellDate != null} ? ${r.sellDate} : '持有中'">--</td>
+                <td class="num"
+                    th:text="${r.sellPrice != null} ? ${#numbers.formatDecimal(r.sellPrice, 1, 3)} : '--'">--</td>
+                <td class="num" th:text="${r.shares}">--</td>
+                <td class="num" th:text="${r.holdingDays}">--</td>
+                <td class="num"
+                    th:classappend="${r.pnl != null} ? (${r.pnl >= 0} ? 'up' : 'down') : ''"
+                    th:text="${r.pnl != null} ? ${#numbers.formatDecimal(r.pnl, 1, 2)} : '--'">--</td>
+                <td class="num"
+                    th:classappend="${r.returnPct != null} ? (${r.returnPct >= 0} ? 'up' : 'down') : ''"
+                    th:text="${r.returnPct != null} ? ${#numbers.formatDecimal(r.returnPct * 100, 1, 2) + '%'} : '--'">--</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>

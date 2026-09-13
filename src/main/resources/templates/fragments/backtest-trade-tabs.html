@@ -1,0 +1,13 @@
+<!--
+  交易记录子视图切换：按标的配对（默认）/ 订单流水。
+  两个片段都 `th:replace` 本片段并传入当前视图，HTMX 替换后高亮状态仍正确。
+-->
+<div th:fragment="tabs(active, taskId)" class="range-tabs" style="margin-bottom:10px"
+     xmlns:th="http://www.thymeleaf.org">
+    <button type="button" class="btn btn-sm" th:classappend="${active == 'trips'} ? 'active'"
+            th:attr="hx-get=@{/fragments/backtest/{id}/trips(id=${taskId})}"
+            hx-target="#bt-trades" hx-swap="outerHTML">按标的配对</button>
+    <button type="button" class="btn btn-sm" th:classappend="${active == 'orders'} ? 'active'"
+            th:attr="hx-get=@{/fragments/backtest/{id}/trades(id=${taskId})}"
+            hx-target="#bt-trades" hx-swap="outerHTML">订单流水</button>
+</div>

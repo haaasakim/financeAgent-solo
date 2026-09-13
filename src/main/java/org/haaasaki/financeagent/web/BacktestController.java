@@ -7,6 +7,9 @@ import java.util.List;
 import org.haaasaki.financeagent.backtest.BacktestRequest;
 import org.haaasaki.financeagent.backtest.BacktestResultView;
 import org.haaasaki.financeagent.backtest.BacktestService;
+import org.haaasaki.financeagent.backtest.RoundTripSort;
+import org.haaasaki.financeagent.backtest.engine.BacktestParams;
+import org.haaasaki.financeagent.backtest.engine.RebalanceFrequency;
 import org.haaasaki.financeagent.common.exception.BusinessException;
 import org.haaasaki.financeagent.data.model.BacktestDaily;
 import org.haaasaki.financeagent.data.model.BacktestTask;
@@ -41,13 +44,12 @@ public class BacktestController {
         model.addAttribute("strategies", backtestService.strategies());
         model.addAttribute("benchmarks", backtestService.benchmarks());
         model.addAttribute("recentTasks", backtestService.recentTasks());
-        model.addAttribute("selectedStrategyId", strategyId);
 
-        LocalDate dataThrough = backtestService.dataThrough().orElse(null);
-        model.addAttribute("defaultEnd", dataThrough);
-        model.addAttribute("defaultStart", dataThrough == null ? null : dataThrough.minusYears(3));
+        addFormDefaults(model, strategyId);
 
         if (taskId != null) {
+            // 历史回测：用任务保存的参数回显表单，再加载结果；任务不存在或参数损坏时静默保留默认值
+            backtestService.params(taskId).ifPresent(params -> applyFormDefaults(model, params));
             try {
                 attachResult(model, backtestService.result(taskId, 1));
             } catch (BusinessException e) {
@@ -55,6 +57,39 @@ public class BacktestController {
             }
         }
         return "backtest/index";
+    }
+
+    /** 表单默认值：新回测为最近 3 年 / 每月 / Top20 / 100 万 / 默认费率与沪深300。 */
+    private void addFormDefaults(Model model, Long strategyId) {
+        LocalDate dataThrough = backtestService.dataThrough().orElse(null);
+        model.addAttribute("defaultEnd", dataThrough);
+        model.addAttribute("defaultStart", dataThrough == null ? null : dataThrough.minusYears(3));
+        model.addAttribute("selectedStrategyId", strategyId);
+        model.addAttribute("selectedFrequency", RebalanceFrequency.MONTHLY.name());
+        model.addAttribute("selectedTopN", 20);
+        model.addAttribute("defaultInitialCapital", "1000000");
+        model.addAttribute("defaultCommissionRatePct", "0.03");
+        model.addAttribute("defaultStampTaxPct", "0.05");
+        model.addAttribute("defaultSlippageBps", "5");
+        model.addAttribute("selectedBenchmarkId", "000300.SH");
+    }
+
+    /** 回显历史任务参数；金额与费率按页面单位（元 / % / bps）展示。 */
+    private void applyFormDefaults(Model model, BacktestParams params) {
+        model.addAttribute("defaultStart", params.startDate());
+        model.addAttribute("defaultEnd", params.endDate());
+        model.addAttribute("selectedStrategyId", params.strategyId());
+        model.addAttribute("selectedFrequency", params.frequency().name());
+        model.addAttribute("selectedTopN", params.topN());
+        model.addAttribute("defaultInitialCapital", plain(params.initialCapital()));
+        model.addAttribute("defaultCommissionRatePct", plain(params.commissionRate().movePointRight(2)));
+        model.addAttribute("defaultStampTaxPct", plain(params.stampTaxRate().movePointRight(2)));
+        model.addAttribute("defaultSlippageBps", plain(params.slippage().movePointRight(4)));
+        model.addAttribute("selectedBenchmarkId", params.benchmarkId());
+    }
+
+    private static String plain(BigDecimal value) {
+        return value.stripTrailingZeros().toPlainString();
     }
 
     @GetMapping("/backtest/{id}")
@@ -107,10 +142,25 @@ public class BacktestController {
         return "fragments/backtest-trades";
     }
 
-    /** 把结果与图表数据放进模型，供模板渲染与 app.js 初始化。 */
+    @GetMapping("/fragments/backtest/{id}/trips")
+    public String trips(@PathVariable long id,
+                        @RequestParam(defaultValue = "1") int page,
+                        @RequestParam(required = false) String sort,
+                        @RequestParam(required = false) String dir,
+                        Model model) {
+        model.addAttribute("tripView", backtestService.roundTrips(id, page,
+                RoundTripSort.fromKey(sort), "desc".equalsIgnoreCase(dir)));
+        model.addAttribute("sortFields", RoundTripSort.values());
+        return "fragments/backtest-round-trips";
+    }
+
+    /** 把结果、往返配对与图表数据放进模型，供模板渲染与 app.js 初始化。 */
     private void attachResult(Model model, BacktestResultView result) {
         List<BacktestDaily> daily = result.daily();
         model.addAttribute("result", result);
+        model.addAttribute("tripView", backtestService.roundTrips(result.task().id(), 1,
+                RoundTripSort.DEFAULT, false));
+        model.addAttribute("sortFields", RoundTripSort.values());
         model.addAttribute("dates", daily.stream()
                 .map(row -> row.tradeDate().toString()).toList());
         model.addAttribute("navSeries", daily.stream().map(BacktestDaily::nav).toList());

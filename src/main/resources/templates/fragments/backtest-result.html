@@ -56,10 +56,10 @@
 
     <div class="card">
         <div class="card-hd">
-            <div class="card-title">交易流水</div>
-            <div class="card-sub" th:text="|信号 ${task.strategyName} · 含未成交订单|">--</div>
+            <div class="card-title">交易记录</div>
+            <div class="card-sub" th:text="|信号 ${task.strategyName} · 未成交订单见「订单流水」|">--</div>
         </div>
-        <div th:replace="~{fragments/backtest-trades :: trades}"></div>
+        <div th:replace="~{fragments/backtest-round-trips :: trips}"></div>
     </div>
 
     <script th:inline="javascript">

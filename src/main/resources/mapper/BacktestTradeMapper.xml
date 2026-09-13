@@ -50,4 +50,12 @@
         SELECT COUNT(*) FROM backtest_trade WHERE task_id = #{taskId}
     </select>
 
+    <select id="findFilledByTask" resultMap="BacktestTradeMap">
+        SELECT task_id, order_no, instrument_id, code, name, side, status,
+               signal_date, order_date, filled_date, price, shares, amount, fee, pnl, reason
+        FROM backtest_trade
+        WHERE task_id = #{taskId} AND status = 'FILLED'
+        ORDER BY order_no
+    </select>
+
 </mapper>

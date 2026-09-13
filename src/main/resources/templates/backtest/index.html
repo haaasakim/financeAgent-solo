@@ -37,43 +37,49 @@
                 <div class="field">
                     <label>调仓频率</label>
                     <select name="frequency">
-                        <option value="DAILY">每日</option>
-                        <option value="WEEKLY">每周</option>
-                        <option value="MONTHLY" selected>每月</option>
-                        <option value="QUARTERLY">每季</option>
+                        <option value="DAILY" th:selected="${selectedFrequency == 'DAILY'}">每日</option>
+                        <option value="WEEKLY" th:selected="${selectedFrequency == 'WEEKLY'}">每周</option>
+                        <option value="MONTHLY" th:selected="${selectedFrequency == 'MONTHLY'}">每月</option>
+                        <option value="QUARTERLY" th:selected="${selectedFrequency == 'QUARTERLY'}">每季</option>
                     </select>
                 </div>
                 <div class="field">
-                    <label>持仓数量</label>
-                    <select name="topN">
-                        <option value="10">Top 10</option>
-                        <option value="20" selected>Top 20</option>
-                        <option value="30">Top 30</option>
-                        <option value="50">Top 50</option>
-                    </select>
+                    <label>持仓数量（1 ~ 100，等权）</label>
+                    <input type="number" name="topN" th:value="${selectedTopN}"
+                           min="1" max="100" step="1" list="topn-presets">
+                    <datalist id="topn-presets">
+                        <option value="10"></option>
+                        <option value="20"></option>
+                        <option value="30"></option>
+                        <option value="50"></option>
+                    </datalist>
                 </div>
                 <div class="field">
                     <label>初始资金（元）</label>
-                    <input type="number" name="initialCapital" value="1000000" min="1000" step="1000">
+                    <input type="number" name="initialCapital" th:value="${defaultInitialCapital}"
+                           min="1000" step="1000">
                 </div>
                 <div class="field">
                     <label>佣金率（%）</label>
-                    <input type="number" name="commissionRatePct" value="0.03" min="0" max="1" step="0.001">
+                    <input type="number" name="commissionRatePct" th:value="${defaultCommissionRatePct}"
+                           min="0" max="1" step="0.001">
                 </div>
                 <div class="field">
                     <label>印花税（%，卖出）</label>
-                    <input type="number" name="stampTaxPct" value="0.05" min="0" max="1" step="0.001">
+                    <input type="number" name="stampTaxPct" th:value="${defaultStampTaxPct}"
+                           min="0" max="1" step="0.001">
                 </div>
                 <div class="field">
                     <label>滑点（bps）</label>
-                    <input type="number" name="slippageBps" value="5" min="0" max="100" step="1">
+                    <input type="number" name="slippageBps" th:value="${defaultSlippageBps}"
+                           min="0" max="100" step="1">
                 </div>
                 <div class="field">
                     <label>基准</label>
                     <select name="benchmarkId">
                         <option th:each="b : ${benchmarks}" th:value="${b.instrumentId}"
                                 th:text="${b.name}"
-                                th:selected="${b.instrumentId == '000300.SH'}"></option>
+                                th:selected="${selectedBenchmarkId == b.instrumentId}"></option>
                     </select>
                 </div>
             </div>
@@ -88,7 +94,7 @@
                     还没有已保存策略，先到「选股」页保存一个
                 </span>
                 <span class="card-sub" th:unless="${#lists.isEmpty(benchmarks)}">
-                    回测仅支持含历史序列的技术因子；估值类因子（PE/PB）暂不可用
+                    回测按历史时点截面取数；估值（PE/PB）可用，财务与股息因子暂无数据
                 </span>
             </div>
         </form>
