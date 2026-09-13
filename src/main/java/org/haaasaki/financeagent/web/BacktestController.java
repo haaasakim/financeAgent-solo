@@ -7,7 +7,11 @@ import java.util.List;
 import org.haaasaki.financeagent.backtest.BacktestRequest;
 import org.haaasaki.financeagent.backtest.BacktestResultView;
 import org.haaasaki.financeagent.backtest.BacktestService;
+import org.haaasaki.financeagent.backtest.BacktestTaskSort;
+import org.haaasaki.financeagent.backtest.BacktestTaskView;
+import org.haaasaki.financeagent.backtest.RoundTripQuery;
 import org.haaasaki.financeagent.backtest.RoundTripSort;
+import org.haaasaki.financeagent.backtest.RoundTripView;
 import org.haaasaki.financeagent.backtest.engine.BacktestParams;
 import org.haaasaki.financeagent.backtest.engine.RebalanceFrequency;
 import org.haaasaki.financeagent.common.exception.BusinessException;
@@ -39,11 +43,14 @@ public class BacktestController {
     @GetMapping("/backtest")
     public String page(@RequestParam(required = false) Long strategyId,
                        @RequestParam(required = false) Long taskId,
+                       @RequestParam(defaultValue = "1") int page,
+                       @RequestParam(required = false) String sort,
+                       @RequestParam(required = false) String dir,
                        Model model) {
         model.addAttribute("active", "backtest");
         model.addAttribute("strategies", backtestService.strategies());
         model.addAttribute("benchmarks", backtestService.benchmarks());
-        model.addAttribute("recentTasks", backtestService.recentTasks());
+        model.addAttribute("taskView", taskView(page, sort, dir));
 
         addFormDefaults(model, strategyId);
 
@@ -57,6 +64,23 @@ public class BacktestController {
             }
         }
         return "backtest/index";
+    }
+
+    /** 回测记录局部刷新：分页与排序保留在同一片段内（HTMX）。 */
+    @GetMapping("/fragments/backtest/tasks")
+    public String tasks(@RequestParam(defaultValue = "1") int page,
+                        @RequestParam(required = false) String sort,
+                        @RequestParam(required = false) String dir,
+                        Model model) {
+        model.addAttribute("taskView", taskView(page, sort, dir));
+        return "fragments/backtest-recent-tasks";
+    }
+
+    /** 解析排序参数：未知键回退编号；dir 缺省按降序（最新 / 最高在前）。 */
+    private BacktestTaskView taskView(int page, String sortKey, String dir) {
+        BacktestTaskSort sort = BacktestTaskSort.fromKey(sortKey);
+        boolean desc = dir == null || dir.isBlank() || !"asc".equalsIgnoreCase(dir);
+        return backtestService.recentTasks(page, sort, desc);
     }
 
     /** 表单默认值：新回测为最近 3 年 / 每月 / Top20 / 100 万 / 默认费率与沪深300。 */
@@ -147,9 +171,19 @@ public class BacktestController {
                         @RequestParam(defaultValue = "1") int page,
                         @RequestParam(required = false) String sort,
                         @RequestParam(required = false) String dir,
+                        @RequestParam(required = false) String keyword,
+                        @RequestParam(required = false)
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate buyFrom,
+                        @RequestParam(required = false)
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate buyTo,
+                        @RequestParam(required = false)
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate sellFrom,
+                        @RequestParam(required = false)
+                        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate sellTo,
                         Model model) {
         model.addAttribute("tripView", backtestService.roundTrips(id, page,
-                RoundTripSort.fromKey(sort), "desc".equalsIgnoreCase(dir)));
+                RoundTripSort.fromKey(sort), "desc".equalsIgnoreCase(dir),
+                new RoundTripQuery(keyword, buyFrom, buyTo, sellFrom, sellTo)));
         model.addAttribute("sortFields", RoundTripSort.values());
         return "fragments/backtest-round-trips";
     }
@@ -158,8 +192,10 @@ public class BacktestController {
     private void attachResult(Model model, BacktestResultView result) {
         List<BacktestDaily> daily = result.daily();
         model.addAttribute("result", result);
-        model.addAttribute("tripView", backtestService.roundTrips(result.task().id(), 1,
-                RoundTripSort.DEFAULT, false));
+        RoundTripView tripView = backtestService.roundTrips(result.task().id(), 1,
+                RoundTripSort.DEFAULT, false, RoundTripQuery.EMPTY);
+        model.addAttribute("tripView", tripView);
+        model.addAttribute("totalFee", tripView.feeTotal());
         model.addAttribute("sortFields", RoundTripSort.values());
         model.addAttribute("dates", daily.stream()
                 .map(row -> row.tradeDate().toString()).toList());

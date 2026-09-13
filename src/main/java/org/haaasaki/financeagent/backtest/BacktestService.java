@@ -45,7 +45,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class BacktestService {
 
     public static final String ENGINE_VERSION = "1";
-    private static final int RECENT_LIMIT = 10;
+    public static final int TASK_PAGE_SIZE = 20;
     public static final int TRADE_PAGE_SIZE = 50;
     public static final int TRIP_PAGE_SIZE = 50;
 
@@ -235,8 +235,16 @@ public class BacktestService {
         });
     }
 
-    public List<BacktestTask> recentTasks() {
-        return backtestTaskMapper.findRecent(RECENT_LIMIT);
+    /** 回测记录分页视图：全部任务，可按编号 / 收益 / 回撤 / 夏普排序。 */
+    public BacktestTaskView recentTasks(int page, BacktestTaskSort sort, boolean desc) {
+        int currentPage = Math.max(1, page);
+        long total = backtestTaskMapper.countAll();
+        int offset = (currentPage - 1) * TASK_PAGE_SIZE;
+        List<BacktestTask> tasks = offset >= total
+                ? List.of()
+                : backtestTaskMapper.findPage(sort.column(), desc ? "DESC" : "ASC",
+                        TASK_PAGE_SIZE, offset);
+        return new BacktestTaskView(tasks, total, currentPage, TASK_PAGE_SIZE, sort, desc);
     }
 
     public List<Strategy> strategies() {
@@ -266,24 +274,32 @@ public class BacktestService {
                 trades, total, currentPage, TRADE_PAGE_SIZE);
     }
 
-    /** 按标的配对的往返记录视图；与订单流水同一成功状态校验与分页口径，支持白名单排序。 */
-    public RoundTripView roundTrips(long taskId, int page, RoundTripSort sort, boolean desc) {
+    /**
+     * 按标的配对的往返记录视图；与订单流水同一成功状态校验与分页口径，
+     * 支持代码/名称与买卖日搜索、白名单排序；费用合计按命中集合统计。
+     */
+    public RoundTripView roundTrips(long taskId, int page, RoundTripSort sort, boolean desc,
+                                    RoundTripQuery query) {
         BacktestTask task = task(taskId);
         if (!BacktestTask.STATUS_SUCCESS.equals(task.status())) {
             throw new BusinessException("任务尚未成功完成，无法查看结果");
         }
+        RoundTripQuery effective = query == null ? RoundTripQuery.EMPTY : query;
         List<BacktestTrade> filled = backtestTradeMapper.findFilledByTask(taskId);
         List<LocalDate> tradingDates = backtestDailyMapper.findByTask(taskId).stream()
                 .map(BacktestDaily::tradeDate)
                 .toList();
         List<RoundTrip> all = new ArrayList<>(TradePairing.pair(filled, tradingDates));
+        all.removeIf(trip -> !effective.matches(trip));
         all.sort(sort.comparator(desc));
+        double feeTotal = all.stream().mapToDouble(RoundTrip::feeTotal).sum();
 
         int currentPage = Math.max(1, page);
         int offset = (currentPage - 1) * TRIP_PAGE_SIZE;
         List<RoundTrip> rows = offset >= all.size()
                 ? List.of()
                 : List.copyOf(all.subList(offset, Math.min(offset + TRIP_PAGE_SIZE, all.size())));
-        return new RoundTripView(task, rows, all.size(), currentPage, TRIP_PAGE_SIZE, sort, desc);
+        return new RoundTripView(task, rows, all.size(), currentPage, TRIP_PAGE_SIZE, sort, desc,
+                effective, feeTotal);
     }
 }

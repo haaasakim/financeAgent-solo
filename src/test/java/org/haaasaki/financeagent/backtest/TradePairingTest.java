@@ -37,6 +37,9 @@ class TradePairingTest {
         assertThat(trip.shares()).isEqualTo(1000L);
         assertThat(trip.sellDate()).isEqualTo(LocalDate.of(2024, 1, 5));
         assertThat(trip.sellPrice()).isEqualTo(11.0);
+        assertThat(trip.buyFee()).isEqualTo(5.0);
+        assertThat(trip.sellFee()).isEqualTo(10.0);
+        assertThat(trip.feeTotal()).isEqualTo(15.0);
         assertThat(trip.pnl()).isEqualTo(985.0);
         assertThat(trip.holdingDays()).isEqualTo(3);
         // 收益率以买入成本（金额 + 费用）为分母
@@ -74,6 +77,9 @@ class TradePairingTest {
 
         assertThat(trips).hasSize(1);
         assertThat(trips.get(0).sellDate()).isNull();
+        assertThat(trips.get(0).buyFee()).isEqualTo(5.0);
+        assertThat(trips.get(0).sellFee()).isNull();
+        assertThat(trips.get(0).feeTotal()).isEqualTo(5.0);
         assertThat(trips.get(0).holdingDays()).isEqualTo(4);
     }
 

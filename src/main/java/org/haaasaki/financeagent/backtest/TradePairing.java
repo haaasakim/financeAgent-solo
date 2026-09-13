@@ -62,19 +62,22 @@ public final class TradePairing {
 
     private static RoundTrip closed(BacktestTrade buy, BacktestTrade sell, int holdingDays) {
         double buyAmount = amount(buy);
-        double cost = buyAmount + fee(buy);
+        double buyFee = fee(buy);
+        double sellFee = fee(sell);
+        double cost = buyAmount + buyFee;
         Double pnl = sell.pnl();
         Double returnPct = pnl == null || cost <= 0 ? null : pnl / cost;
         return new RoundTrip(buy.instrumentId(), buy.code(), buy.name(), buy.filledDate(),
-                price(buy), shares(buy), buyAmount,
-                sell.filledDate(), sell.price(), sell.amount(),
+                price(buy), shares(buy), buyAmount, buyFee,
+                sell.filledDate(), sell.price(), sell.amount(), sellFee, buyFee + sellFee,
                 pnl, returnPct, holdingDays);
     }
 
     private static RoundTrip open(BacktestTrade buy, int holdingDays) {
+        double buyFee = fee(buy);
         return new RoundTrip(buy.instrumentId(), buy.code(), buy.name(), buy.filledDate(),
-                price(buy), shares(buy), amount(buy),
-                null, null, null, null, null, holdingDays);
+                price(buy), shares(buy), amount(buy), buyFee,
+                null, null, null, null, buyFee, null, null, holdingDays);
     }
 
     /** 持有交易日数 = 日度序列下标差；日期缺失时保守返回 0。 */

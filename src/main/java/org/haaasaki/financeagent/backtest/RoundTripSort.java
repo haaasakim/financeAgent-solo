@@ -16,8 +16,10 @@ public enum RoundTripSort {
     BUY_DATE("buyDate", "买入日", false),
     BUY_PRICE("buyPrice", "买入价", true),
     BUY_AMOUNT("buyAmount", "买入金额", true),
+    BUY_FEE("buyFee", "买入费用", true),
     SELL_DATE("sellDate", "卖出日", false),
     SELL_PRICE("sellPrice", "卖出价", true),
+    SELL_FEE("sellFee", "卖出费用", true),
     SHARES("shares", "股数", true),
     HOLDING_DAYS("holdingDays", "持有（交易日）", true),
     PNL("pnl", "盈亏", true),
@@ -73,8 +75,10 @@ public enum RoundTripSort {
             case BUY_DATE -> a.buyDate().compareTo(b.buyDate());
             case BUY_PRICE -> Double.compare(a.buyPrice(), b.buyPrice());
             case BUY_AMOUNT -> Double.compare(a.buyAmount(), b.buyAmount());
+            case BUY_FEE -> Double.compare(a.buyFee(), b.buyFee());
             case SELL_DATE -> compareNullable(a.sellDate(), b.sellDate());
             case SELL_PRICE -> compareNullable(a.sellPrice(), b.sellPrice());
+            case SELL_FEE -> compareNullable(a.sellFee(), b.sellFee());
             case SHARES -> Long.compare(a.shares(), b.shares());
             case HOLDING_DAYS -> Integer.compare(a.holdingDays(), b.holdingDays());
             case PNL -> compareNullable(a.pnl(), b.pnl());
@@ -87,6 +91,7 @@ public enum RoundTripSort {
         return switch (this) {
             case SELL_DATE -> a.sellDate() == null || b.sellDate() == null;
             case SELL_PRICE -> a.sellPrice() == null || b.sellPrice() == null;
+            case SELL_FEE -> a.sellFee() == null || b.sellFee() == null;
             case PNL -> a.pnl() == null || b.pnl() == null;
             case RETURN_PCT -> a.returnPct() == null || b.returnPct() == null;
             default -> false;

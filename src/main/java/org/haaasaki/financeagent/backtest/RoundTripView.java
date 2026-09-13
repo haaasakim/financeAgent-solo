@@ -7,13 +7,15 @@ import org.haaasaki.financeagent.data.model.BacktestTask;
 /**
  * 「按标的配对」分页视图：给回测结果页展示往返记录。
  *
- * @param task  任务
- * @param trips 当前页往返记录
- * @param total 往返记录总数（含期末持有）
- * @param page  当前页（从 1 开始）
- * @param size  每页条数
- * @param sort  当前排序字段
- * @param desc  是否降序
+ * @param task     任务
+ * @param trips    当前页往返记录
+ * @param total    命中搜索条件的往返记录总数（含期末持有）
+ * @param page     当前页（从 1 开始）
+ * @param size     每页条数
+ * @param sort     当前排序字段
+ * @param desc     是否降序
+ * @param query    当前搜索条件
+ * @param feeTotal 命中搜索条件的费用合计（买入费用 + 已卖出费用），元
  */
 public record RoundTripView(
         BacktestTask task,
@@ -22,10 +24,17 @@ public record RoundTripView(
         int page,
         int size,
         RoundTripSort sort,
-        boolean desc) {
+        boolean desc,
+        RoundTripQuery query,
+        double feeTotal) {
 
     public int totalPages() {
         return total == 0 ? 1 : (int) ((total + size - 1) / size);
+    }
+
+    /** 是否有生效的搜索条件，供页面提示「筛选后」与展示重置入口。 */
+    public boolean hasQuery() {
+        return !query.isEmpty();
     }
 
     public boolean hasPrev() {

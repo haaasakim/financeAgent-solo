@@ -23,7 +23,13 @@ public interface BacktestTaskMapper {
 
     Optional<BacktestTask> findById(@Param("id") long id);
 
-    List<BacktestTask> findRecent(@Param("limit") int limit);
+    /** 分页查询；排序列与方向必须来自服务层白名单映射（camelCase key → snake_case 列）。 */
+    List<BacktestTask> findPage(@Param("sortColumn") String sortColumn,
+                                @Param("direction") String direction,
+                                @Param("limit") int limit,
+                                @Param("offset") int offset);
+
+    long countAll();
 
     int markRunning(@Param("id") long id,
                     @Param("progressTotal") int progressTotal,

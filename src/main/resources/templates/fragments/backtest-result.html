@@ -6,7 +6,7 @@
 <div id="bt-result" th:fragment="result" xmlns:th="http://www.thymeleaf.org"
      th:with="task=${result.task}">
 
-    <div class="metrics cols-6">
+    <div class="metrics cols-7">
         <div class="metric">
             <div class="metric-label">累计收益</div>
             <div class="metric-val"
@@ -38,6 +38,11 @@
             <div class="metric-label">年化换手</div>
             <div class="metric-val"
                  th:text="${task.turnover != null} ? ${#numbers.formatDecimal(task.turnover * 100, 1, 1) + '%'} : '--'">--</div>
+        </div>
+        <div class="metric">
+            <div class="metric-label">累计费用（元）</div>
+            <div class="metric-val"
+                 th:text="${totalFee != null} ? ${#numbers.formatDecimal(totalFee, 1, 2)} : '--'">--</div>
         </div>
     </div>
 

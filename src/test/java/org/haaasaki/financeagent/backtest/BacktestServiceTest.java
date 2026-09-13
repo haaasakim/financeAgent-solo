@@ -95,7 +95,7 @@ class BacktestServiceTest {
                 LocalDate.of(2026, 9, 11))))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("估值历史尚未回填");
-        assertThat(backtestTaskMapper.findRecent(10)).isEmpty();
+        assertThat(backtestTaskMapper.countAll()).isZero();
     }
 
     @Test
@@ -111,7 +111,7 @@ class BacktestServiceTest {
                 LocalDate.of(2026, 9, 11))))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("估值数据自 2017-01-03 起");
-        assertThat(backtestTaskMapper.findRecent(10)).isEmpty();
+        assertThat(backtestTaskMapper.countAll()).isZero();
     }
 
     @Test
@@ -123,7 +123,7 @@ class BacktestServiceTest {
                 LocalDate.of(2026, 10, 1))))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("最新数据日期");
-        assertThat(backtestTaskMapper.findRecent(10)).isEmpty();
+        assertThat(backtestTaskMapper.countAll()).isZero();
     }
 
     @Test
@@ -148,24 +148,52 @@ class BacktestServiceTest {
                 new BacktestDaily(taskId, LocalDate.of(2024, 1, 4), 1.0, 1.0, 0.0, 1.0, 0.0),
                 new BacktestDaily(taskId, LocalDate.of(2024, 1, 5), 1.0, 1.0, 0.0, 1.0, 0.0)));
 
-        RoundTripView view = backtestService.roundTrips(taskId, 1, RoundTripSort.DEFAULT, false);
+        RoundTripView view = backtestService.roundTrips(taskId, 1, RoundTripSort.DEFAULT, false,
+                RoundTripQuery.EMPTY);
 
         assertThat(view.total()).isEqualTo(2);
         assertThat(view.trips()).hasSize(2);
         assertThat(view.trips().get(0).code()).isEqualTo("000001");
         assertThat(view.trips().get(0).holdingDays()).isEqualTo(2);
         assertThat(view.trips().get(0).pnl()).isEqualTo(985.0);
+        // 费用：买入 5 + 卖出 10；持有中只有买入 5；总览合计含持有中买单
+        assertThat(view.trips().get(0).buyFee()).isEqualTo(5.0);
+        assertThat(view.trips().get(0).sellFee()).isEqualTo(10.0);
+        assertThat(view.trips().get(0).feeTotal()).isEqualTo(15.0);
         assertThat(view.trips().get(1).code()).isEqualTo("000002");
         assertThat(view.trips().get(1).sellDate()).isNull();
-        assertThat(backtestService.roundTrips(taskId, 2, RoundTripSort.DEFAULT, false).trips()).isEmpty();
+        assertThat(view.trips().get(1).feeTotal()).isEqualTo(5.0);
+        assertThat(view.feeTotal()).isEqualTo(20.0);
+        assertThat(backtestService.roundTrips(taskId, 2, RoundTripSort.DEFAULT, false,
+                RoundTripQuery.EMPTY).trips()).isEmpty();
 
         // 代码降序与盈亏降序（持有中空值恒最后）
-        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.CODE, true).trips())
+        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.CODE, true,
+                RoundTripQuery.EMPTY).trips())
                 .extracting(RoundTrip::code).containsExactly("000002", "000001");
-        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.PNL, true).trips())
+        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.PNL, true,
+                RoundTripQuery.EMPTY).trips())
                 .extracting(RoundTrip::code).containsExactly("000001", "000002");
-        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.PNL, false).trips())
+        assertThat(backtestService.roundTrips(taskId, 1, RoundTripSort.PNL, false,
+                RoundTripQuery.EMPTY).trips())
                 .extracting(RoundTrip::code).containsExactly("000001", "000002");
+
+        // 搜索：关键词只看匹配项，命中集合的费用合计与总数同步收窄
+        RoundTripView byKeyword = backtestService.roundTrips(taskId, 1, RoundTripSort.DEFAULT,
+                false, new RoundTripQuery("000002", null, null, null, null));
+        assertThat(byKeyword.total()).isEqualTo(1);
+        assertThat(byKeyword.trips()).extracting(RoundTrip::code).containsExactly("000002");
+        assertThat(byKeyword.feeTotal()).isEqualTo(5.0);
+
+        // 买入日范围（闭区间）内命中；卖出日条件排除期末持有
+        RoundTripView byBuyDate = backtestService.roundTrips(taskId, 1, RoundTripSort.DEFAULT,
+                false, new RoundTripQuery(null, LocalDate.of(2024, 1, 2),
+                LocalDate.of(2024, 1, 2), null, null));
+        assertThat(byBuyDate.total()).isEqualTo(1);
+        RoundTripView bySellDate = backtestService.roundTrips(taskId, 1, RoundTripSort.DEFAULT,
+                false, new RoundTripQuery(null, null, null, LocalDate.of(2024, 1, 1), null));
+        assertThat(bySellDate.total()).isEqualTo(1);
+        assertThat(bySellDate.trips()).extracting(RoundTrip::code).containsExactly("000001");
     }
 
     @Test

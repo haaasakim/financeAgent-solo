@@ -107,56 +107,7 @@
         </div>
     </div>
 
-    <div class="card" style="margin-top:16px" th:if="${!recentTasks.isEmpty()}">
-        <div class="card-hd">
-            <div class="card-title">最近回测</div>
-        </div>
-        <div class="table-scroll">
-            <table>
-                <thead>
-                <tr>
-                    <th>编号</th>
-                    <th>策略</th>
-                    <th>状态</th>
-                    <th class="num">累计收益</th>
-                    <th class="num">年化收益</th>
-                    <th class="num">最大回撤</th>
-                    <th class="num">夏普</th>
-                    <th>创建时间</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="t : ${recentTasks}">
-                    <td class="code" th:text="${t.id}">1</td>
-                    <td th:text="${t.strategyName}">策略</td>
-                    <td>
-                        <span th:switch="${t.status}">
-                            <span th:case="'SUCCESS'" class="flat">成功</span>
-                            <span th:case="'FAILED'" class="down">失败</span>
-                            <span th:case="'RUNNING'" th:text="|运行中 ${t.progressDone}/${t.progressTotal}|">运行中</span>
-                            <span th:case="*">排队中</span>
-                        </span>
-                    </td>
-                    <td class="num"
-                        th:classappend="${t.cumulativeReturn != null} ? (${t.cumulativeReturn > 0} ? 'up' : (${t.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
-                        th:text="${t.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
-                    <td class="num"
-                        th:text="${t.annualReturn != null} ? ${#numbers.formatDecimal(t.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
-                    <td class="num down"
-                        th:text="${t.maxDrawdown != null} ? ${#numbers.formatDecimal(t.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
-                    <td class="num"
-                        th:text="${t.sharpe != null} ? ${#numbers.formatDecimal(t.sharpe, 1, 2)} : '--'">--</td>
-                    <td class="card-sub" th:text="${t.createdAt}">--</td>
-                    <td>
-                        <a class="btn btn-sm" th:if="${t.status == 'SUCCESS'}"
-                           th:href="@{/backtest(taskId=${t.id})}">查看</a>
-                    </td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    <div th:replace="~{fragments/backtest-recent-tasks :: recent}"></div>
 
 </main>
 

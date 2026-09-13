@@ -16,9 +16,12 @@ import java.time.LocalDate;
  * @param buyPrice     买入成交价（含滑点），元
  * @param shares       股数
  * @param buyAmount    买入金额（不含费用），元
+ * @param buyFee       买入费用（佣金），元
  * @param sellDate     卖出成交日；未卖出为 null
  * @param sellPrice    卖出成交价（含滑点），元；未卖出为 null
  * @param sellAmount   卖出金额（不含费用），元；未卖出为 null
+ * @param sellFee      卖出费用（佣金 + 印花税），元；未卖出为 null
+ * @param feeTotal     本往返已发生费用合计（买入费用 + 已卖出费用），元
  * @param pnl          已实现盈亏（卖出，扣双边费用），元；未卖出为 null
  * @param returnPct    收益率 = 盈亏 / 买入成本（买入金额 + 费用）；未卖出为 null
  * @param holdingDays  持有交易日数（按回测日度序列计）
@@ -31,9 +34,12 @@ public record RoundTrip(
         double buyPrice,
         long shares,
         double buyAmount,
+        double buyFee,
         LocalDate sellDate,
         Double sellPrice,
         Double sellAmount,
+        Double sellFee,
+        double feeTotal,
         Double pnl,
         Double returnPct,
         int holdingDays) {

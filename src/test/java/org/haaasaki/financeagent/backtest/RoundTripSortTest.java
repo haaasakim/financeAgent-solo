@@ -15,11 +15,13 @@ import org.junit.jupiter.api.Test;
 class RoundTripSortTest {
 
     private final RoundTrip a = new RoundTrip("000002.SZ", "000002", "B", LocalDate.of(2024, 1, 2),
-            20.0, 500L, 10000.0, LocalDate.of(2024, 1, 5), 22.0, 11000.0, 900.0, 0.09, 3);
+            20.0, 500L, 10000.0, 5.0, LocalDate.of(2024, 1, 5), 22.0, 11000.0, 10.0, 15.0,
+            900.0, 0.09, 3);
     private final RoundTrip b = new RoundTrip("000001.SZ", "000001", "A", LocalDate.of(2024, 1, 3),
-            10.0, 1000L, 20000.0, LocalDate.of(2024, 1, 4), 11.0, 22000.0, 1900.0, 0.095, 1);
+            10.0, 1000L, 20000.0, 10.0, LocalDate.of(2024, 1, 4), 11.0, 22000.0, 20.0, 30.0,
+            1900.0, 0.095, 1);
     private final RoundTrip open = new RoundTrip("000003.SZ", "000003", "C", LocalDate.of(2024, 1, 4),
-            30.0, 100L, 3000.0, null, null, null, null, null, 2);
+            30.0, 100L, 3000.0, 5.0, null, null, null, null, 5.0, null, null, 2);
 
     @Test
     @DisplayName("代码升 / 降序")
@@ -47,12 +49,23 @@ class RoundTripSortTest {
     }
 
     @Test
+    @DisplayName("费用排序：卖出费用持有中（空值）恒在最后，买入费用全部非空")
+    void sortsByFeesNullsLast() {
+        assertThat(sorted(RoundTripSort.BUY_FEE, true)).extracting(RoundTrip::code)
+                .containsExactly("000001", "000002", "000003");
+        assertThat(sorted(RoundTripSort.SELL_FEE, true)).extracting(RoundTrip::code)
+                .containsExactly("000001", "000002", "000003");
+    }
+
+    @Test
     @DisplayName("同列同值时按买入日、代码升序兜底，保证分页稳定")
     void stableTieBreak() {
         RoundTrip c1 = new RoundTrip("000005.SZ", "000005", "E", LocalDate.of(2024, 1, 2),
-                10.0, 100L, 5000.0, LocalDate.of(2024, 1, 9), 11.0, 5500.0, 500.0, 0.1, 7);
+                10.0, 100L, 5000.0, 5.0, LocalDate.of(2024, 1, 9), 11.0, 5500.0, 10.0, 15.0,
+                500.0, 0.1, 7);
         RoundTrip c2 = new RoundTrip("000004.SZ", "000004", "D", LocalDate.of(2024, 1, 2),
-                10.0, 100L, 5000.0, LocalDate.of(2024, 1, 8), 11.0, 5500.0, 500.0, 0.1, 6);
+                10.0, 100L, 5000.0, 5.0, LocalDate.of(2024, 1, 8), 11.0, 5500.0, 10.0, 15.0,
+                500.0, 0.1, 6);
         List<RoundTrip> list = new ArrayList<>(List.of(c1, c2));
         list.sort(RoundTripSort.BUY_AMOUNT.comparator(true));
         assertThat(list).extracting(RoundTrip::code).containsExactly("000004", "000005");
