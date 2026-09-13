@@ -36,6 +36,9 @@
                         </a>
                     </th>
                     <th>策略</th>
+                    <th>调仓频率</th>
+                    <th class="num">持仓数</th>
+                    <th>回测区间</th>
                     <th>状态</th>
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('cumulativeReturn')} ? 'sorted' : ''">
@@ -79,32 +82,35 @@
                 </thead>
                 <tbody>
                 <tr th:if="${#lists.isEmpty(taskView.tasks)}">
-                    <td colspan="9" class="empty">暂无回测记录</td>
+                    <td colspan="12" class="empty">暂无回测记录</td>
                 </tr>
                 <tr th:each="t : ${taskView.tasks}">
-                    <td class="code" th:text="${t.id}">1</td>
-                    <td th:text="${t.strategyName}">策略</td>
+                    <td class="code" th:text="${t.task.id}">1</td>
+                    <td th:text="${t.task.strategyName}">策略</td>
+                    <td th:text="${t.frequencyLabel()}">--</td>
+                    <td class="num" th:text="${t.topNLabel()}">--</td>
+                    <td th:text="${t.period()}">--</td>
                     <td>
-                        <span th:switch="${t.status}">
+                        <span th:switch="${t.task.status}">
                             <span th:case="'SUCCESS'" class="flat">成功</span>
                             <span th:case="'FAILED'" class="down">失败</span>
-                            <span th:case="'RUNNING'" th:text="|运行中 ${t.progressDone}/${t.progressTotal}|">运行中</span>
+                            <span th:case="'RUNNING'" th:text="|运行中 ${t.task.progressDone}/${t.task.progressTotal}|">运行中</span>
                             <span th:case="*">排队中</span>
                         </span>
                     </td>
                     <td class="num"
-                        th:classappend="${t.cumulativeReturn != null} ? (${t.cumulativeReturn > 0} ? 'up' : (${t.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
-                        th:text="${t.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                        th:classappend="${t.task.cumulativeReturn != null} ? (${t.task.cumulativeReturn > 0} ? 'up' : (${t.task.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
+                        th:text="${t.task.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.task.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num"
-                        th:text="${t.annualReturn != null} ? ${#numbers.formatDecimal(t.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                        th:text="${t.task.annualReturn != null} ? ${#numbers.formatDecimal(t.task.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num down"
-                        th:text="${t.maxDrawdown != null} ? ${#numbers.formatDecimal(t.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
+                        th:text="${t.task.maxDrawdown != null} ? ${#numbers.formatDecimal(t.task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num"
-                        th:text="${t.sharpe != null} ? ${#numbers.formatDecimal(t.sharpe, 1, 2)} : '--'">--</td>
-                    <td class="card-sub" th:text="${t.createdAt}">--</td>
+                        th:text="${t.task.sharpe != null} ? ${#numbers.formatDecimal(t.task.sharpe, 1, 2)} : '--'">--</td>
+                    <td class="card-sub" th:text="${t.task.createdAt}">--</td>
                     <td>
-                        <a class="btn btn-sm" th:if="${t.status == 'SUCCESS'}"
-                           th:href="@{/backtest(taskId=${t.id})}">查看</a>
+                        <a class="btn btn-sm" th:if="${t.task.status == 'SUCCESS'}"
+                           th:href="@{/backtest(taskId=${t.task.id})}">查看</a>
                     </td>
                 </tr>
                 </tbody>

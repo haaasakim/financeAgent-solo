@@ -2,12 +2,10 @@ package org.haaasaki.financeagent.backtest;
 
 import java.util.List;
 
-import org.haaasaki.financeagent.data.model.BacktestTask;
-
 /**
  * 回测记录分页视图：全部任务，按白名单字段排序。
  *
- * @param tasks 当前页任务（最新/指定排序）
+ * @param tasks 当前页记录（任务 + 关键参数）
  * @param total 任务总数
  * @param page  当前页（从 1 开始）
  * @param size  每页条数
@@ -15,7 +13,7 @@ import org.haaasaki.financeagent.data.model.BacktestTask;
  * @param desc  是否降序
  */
 public record BacktestTaskView(
-        List<BacktestTask> tasks,
+        List<BacktestTaskRow> tasks,
         long total,
         int page,
         int size,

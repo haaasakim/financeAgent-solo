@@ -180,10 +180,15 @@ class BacktestControllerTest {
         insertTask(successParams(strategyId), 0.80, -0.20);
         insertTask(successParams(strategyId), 0.10, -0.50);
 
-        // 默认编号降序：最新（低收益）在前
+        // 默认编号降序：最新（低收益）在前；关键参数列展示调仓频率 / 持仓数 / 回测区间
         mockMvc.perform(get("/fragments/backtest/tasks"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("共 2 条")))
+                .andExpect(content().string(containsString("调仓频率")))
+                .andExpect(content().string(containsString("持仓数")))
+                .andExpect(content().string(containsString("回测区间")))
+                .andExpect(content().string(containsString("每日")))
+                .andExpect(content().string(containsString("2024-01-01 ~ 2024-02-29")))
                 .andExpect(content().string(stringContainsInOrder("10.00%", "80.00%")));
 
         // 累计收益降序：高收益在前

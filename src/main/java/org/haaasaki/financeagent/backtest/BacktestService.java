@@ -262,11 +262,25 @@ public class BacktestService {
         int currentPage = Math.max(1, page);
         long total = backtestTaskMapper.countAll();
         int offset = (currentPage - 1) * TASK_PAGE_SIZE;
-        List<BacktestTask> tasks = offset >= total
+        List<BacktestTaskRow> rows = offset >= total
                 ? List.of()
                 : backtestTaskMapper.findPage(sort.column(), desc ? "DESC" : "ASC",
-                        TASK_PAGE_SIZE, offset);
-        return new BacktestTaskView(tasks, total, currentPage, TASK_PAGE_SIZE, sort, desc);
+                        TASK_PAGE_SIZE, offset).stream().map(this::toRow).toList();
+        return new BacktestTaskView(rows, total, currentPage, TASK_PAGE_SIZE, sort, desc);
+    }
+
+    /** 解析任务参数用于记录列表展示；参数损坏或缺失时保持缺失（页面显示 --）。 */
+    private BacktestTaskRow toRow(BacktestTask task) {
+        if (task.paramsJson() == null || task.paramsJson().isBlank()) {
+            return new BacktestTaskRow(task, null, null, null, null);
+        }
+        try {
+            BacktestParams params = objectMapper.readValue(task.paramsJson(), BacktestParams.class);
+            return new BacktestTaskRow(task, params.frequency(), params.topN(),
+                    params.startDate(), params.endDate());
+        } catch (JsonProcessingException e) {
+            return new BacktestTaskRow(task, null, null, null, null);
+        }
     }
 
     public List<Strategy> strategies() {
