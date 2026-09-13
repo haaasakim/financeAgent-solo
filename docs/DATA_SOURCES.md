@@ -11,6 +11,7 @@
 | 分钟K | 腾讯 `mkline` | — | 可用（一期不用） |
 | 实时快照 | 腾讯 `qt.gtimg.cn` | 新浪 | 可用 |
 | 全市场列表 / 估值快照 | 新浪 `Market_Center` | 东财 `push2` | 主源可用；备源本机不可达 |
+| 历史估值（PE-TTM / PB-MRQ） | 东财 `datacenter-web` | — | 可用（WI-007） |
 | 官方公告 | 巨潮 `cninfo` | 东财 `np-anotice-stock` | 均可用 |
 | 结构化事件 | 东财 `datacenter-web` | — | 可用（二期使用） |
 | 财经快讯 | 东财 `np-listapi` | 新浪 `feed.mix` | 可用（二期使用） |
@@ -168,6 +169,34 @@ GET https://datacenter-web.eastmoney.com/api/data/v1/get
 | `RPT_SHAREBONUS_DET` | 分红送转 | 28,487 页 |
 
 直接返回结构化 JSON，无需解析 PDF 或文本。这是把「事件」变成选股因子的最短路径。
+
+### 7.1 历史估值 RPT_VALUEANALYSIS_DET（WI-007）
+
+```
+GET https://datacenter-web.eastmoney.com/api/data/v1/get
+    ?reportName=RPT_VALUEANALYSIS_DET
+    &columns=SECURITY_CODE,TRADE_DATE,PE_TTM,PB_MRQ
+    &filter=(SECURITY_CODE="600000")(TRADE_DATE>='2026-09-08')
+    &pageNumber=1&pageSize=500
+    &sortColumns=TRADE_DATE&sortTypes=-1
+    &source=WEB&client=WEB
+```
+
+| 项 | 实测结论（2026-09-13） |
+|---|---|
+| 分页 | `pageSize` 服务端上限 **10,000**（请求 20,000/50,000 均只返回 10,000）；使用 **5,000** 更稳 |
+| 过滤 | 支持多代码 `in` 与 `(TRADE_DATE>='yyyy-MM-dd')` 过滤，可组合 |
+| **限流教训** | 多代码大批量 + 深分页（page≥5）会被服务端**连接重置**（`请求失败 - url`，非 HTTP 状态），并可能触发数分钟级 IP 冷却；实测恢复约 2~5 分钟。**禁止构造大结果集深分页** |
+| 限流后处理 | 同一 JVM 若持续被重置（curl 正常但 Java 全部失败），说明该进程的连接池已被污染：**重启进程并等待 2~5 分钟冷却**，实测重启后恢复并且逐代码速率可达约 2 只/秒 |
+| 稳定取数策略 | 全量：逐代码单页（单只约 2,100 行 < 5,000）；增量：逐日分片（单日约 5,500 行 = 1~2 页），避开深 offset |
+| 覆盖深度 | 600000 约 2,111 条，最早约 2017-11；各家略有差异 |
+| 日期格式 | `2026-09-11 00:00:00`，取前 10 位为交易日 |
+| 单位 | PE_TTM / PB_MRQ 均为倍，直接存储；非正值（亏损/负净资产）视为无效置 null，不填 0 |
+| 空数据 | ETF 等返回 `success=false, code=9201, message=返回数据为空`，视为「无数据」按成功跳过 |
+| 批次一致性 | 单标的（或单日窗口）所有分页全部成功才写库；条数不符抛 `DataSyncException`，整批拒绝 |
+
+回填任务：`--valuation.init`（有日K的股票）/ `--valuation.update`（从各标的库内最新估值日次日起）；
+`--sync.incremental` 完成后自动衔接因子增量与估值增量。落库口径见 `docs/work-items/WI-007-历史估值数据源.md`。
 
 ## 8. 东财 公告（带分类标签，二期）
 

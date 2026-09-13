@@ -18,6 +18,7 @@
 erDiagram
     instrument ||--o{ daily_bar : "1:N"
     instrument ||--o{ factor_daily : "1:N"
+    instrument ||--o{ valuation_daily : "1:N"
     instrument ||--o{ event : "1:N"
     instrument ||--o| market_snapshot : "1:1 最新"
     strategy ||--o{ backtest_task : "1:N"
@@ -82,6 +83,12 @@ erDiagram
         real volatility_20
         real pct_from_52w_high
     }
+    valuation_daily {
+        text instrument_id PK
+        date trade_date PK
+        real pe_ttm
+        real pb_mrq
+    }
 ```
 
 `instrument_type` 取值：`STOCK` / `ETF` / `INDEX`。
@@ -112,6 +119,10 @@ erDiagram
 **因子口径**：`factor_daily` 的技术指标定义（窗口、公式、缺失语义）以
 `docs/work-items/WI-003-指标计算与因子表.md` 第 2.2 节为准；全部基于前复权收盘价，
 按标的自身 bar 序列滚动（不对齐日历），回看不足的列保持 NULL。
+
+**估值口径**：`valuation_daily` 存逐日 PE-TTM / PB-MRQ（东财数据中心），单位为倍；
+非正值（亏损、负净资产）视为无效，**存 NULL，禁止填 0**。历史截面回测以当日
+`valuation_daily` 行取数，口径与边界见 `docs/work-items/WI-007-历史估值数据源.md`。
 
 ## 3. 复权
 
@@ -170,6 +181,7 @@ erDiagram
 | 数据 | available_at 定义 |
 |---|---|
 | 日K | 该交易日收盘后（15:00） |
+| 估值（PE/PB） | 该交易日收盘后；历史序列见 `valuation_daily`（WI-007） |
 | 财务数据 | **实际披露时间**，不是报告期末 |
 | 公告 / 事件 | 公告发布时间 |
 | 快照类（PE/PB/市值） | 抓取时刻 |
@@ -205,7 +217,7 @@ erDiagram
 - 所有时间序列表主键为 `(instrument_id, trade_date)`，使用 `INSERT ... ON CONFLICT DO UPDATE` 保证幂等。
 - 所有表必须有 `created_at`；可变表需有 `updated_at`。
 - 金额与价格字段不允许 NULL 表示 0，NULL 仅表示未知。
-- 索引：`daily_bar(trade_date)`（按日全市场扫描）、`factor_daily(trade_date)`、`event(instrument_id, event_date)`。
+- 索引：`daily_bar(trade_date)`（按日全市场扫描）、`factor_daily(trade_date)`、`valuation_daily(trade_date)`、`event(instrument_id, event_date)`。
 - 数据库结构变更一律通过 `src/main/resources/db/migration/V*.sql` 迁移脚本，**禁止手工改库**。
 
 ## 10. 合规边界

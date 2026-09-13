@@ -121,6 +121,9 @@ public class ThrottledHttpClient {
             }
         }
 
+        if (lastError != null && lastError.getCause() != null) {
+            log.warn("请求重试耗尽：{} - {}", url, lastError.getCause().toString());
+        }
         throw lastError != null ? lastError : new DataSyncException("请求失败 - " + url);
     }
 

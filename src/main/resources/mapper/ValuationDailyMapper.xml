@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.haaasaki.financeagent.data.mapper.ValuationDailyMapper">
+
+    <resultMap id="ValuationDailyMap" type="org.haaasaki.financeagent.data.model.ValuationDaily">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <idArg column="trade_date" javaType="java.time.LocalDate"/>
+            <arg column="pe_ttm" javaType="java.lang.Double"/>
+            <arg column="pb_mrq" javaType="java.lang.Double"/>
+            <arg column="source" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="upsertBatch">
+        INSERT INTO valuation_daily (instrument_id, trade_date, pe_ttm, pb_mrq,
+                                     source, fetched_at, data_status, created_at, updated_at)
+        VALUES
+        <foreach collection="list" item="it" separator=",">
+            (#{it.instrumentId}, #{it.tradeDate}, #{it.peTtm}, #{it.pbMrq},
+            #{it.source},
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            'ACCEPTED',
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
+            strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
+        </foreach>
+        ON CONFLICT (instrument_id, trade_date) DO UPDATE SET
+        pe_ttm      = excluded.pe_ttm,
+        pb_mrq      = excluded.pb_mrq,
+        source      = excluded.source,
+        fetched_at  = excluded.fetched_at,
+        data_status = excluded.data_status,
+        updated_at  = excluded.updated_at
+    </insert>
+
+    <select id="findInstrumentIdsWithRowSince" resultType="java.lang.String">
+        SELECT DISTINCT instrument_id
+        FROM valuation_daily
+        WHERE trade_date &gt;= #{since}
+    </select>
+
+    <select id="findGlobalMinTradeDate" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM valuation_daily
+    </select>
+
+    <select id="findGlobalMaxTradeDate" resultType="java.time.LocalDate">
+        SELECT MAX(trade_date) FROM valuation_daily
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM valuation_daily
+    </select>
+
+    <select id="countDistinctInstruments" resultType="long">
+        SELECT COUNT(DISTINCT instrument_id) FROM valuation_daily
+    </select>
+
+</mapper>
