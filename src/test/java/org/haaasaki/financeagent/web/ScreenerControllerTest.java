@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
@@ -101,6 +102,7 @@ class ScreenerControllerTest {
                 .andExpect(content().string(containsString("data-group=\"量能\"")))
                 .andExpect(content().string(containsString("data-group=\"风险\"")))
                 .andExpect(content().string(containsString("x-cloak")))
+                .andExpect(content().string(containsString("addConditionTo(section")))
                 // 未加载已保存策略时「拿去回测」置灰，并提示先保存
                 .andExpect(content().string(containsString("先保存为策略后再回测")))
                 // 条件行下拉选项必须服务端渲染，否则 Alpine x-model 会因选项未就绪选中首项
@@ -218,6 +220,8 @@ class ScreenerControllerTest {
                         .param("description", "PE 低")
                         .param("dsl", VALID_DSL))
                 .andExpect(status().isOk())
+                .andExpect(header().string("HX-Replace-Url",
+                        org.hamcrest.Matchers.startsWith("/screener?strategyId=")))
                 .andExpect(content().string(containsString("已保存策略：低估值")))
                 .andExpect(content().string(containsString("低估值")))
                 .andExpect(content().string(containsString("PE 低")))
@@ -244,9 +248,12 @@ class ScreenerControllerTest {
         screenerService.saveStrategy("待删除", null, VALID_DSL);
         long id = screenerService.listStrategies().get(0).id();
 
-        mockMvc.perform(post("/fragments/screener/strategies/{id}/delete", id))
+        mockMvc.perform(post("/fragments/screener/strategies/{id}/delete", id)
+                        .param("selectedStrategyId", String.valueOf(id)))
                 .andExpect(status().isOk())
+                .andExpect(header().string("HX-Replace-Url", "/screener"))
                 .andExpect(content().string(containsString("已删除策略")))
+                .andExpect(content().string(containsString("当前条件尚未保存")))
                 .andExpect(content().string(containsString("尚未保存策略")))
                 .andExpect(content().string(not(containsString("待删除"))));
     }

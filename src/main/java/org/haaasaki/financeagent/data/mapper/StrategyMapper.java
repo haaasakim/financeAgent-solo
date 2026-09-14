@@ -24,5 +24,7 @@ public interface StrategyMapper {
 
     Optional<Strategy> findById(@Param("id") long id);
 
+    Optional<Strategy> findByName(@Param("name") String name);
+
     int deleteById(@Param("id") long id);
 }

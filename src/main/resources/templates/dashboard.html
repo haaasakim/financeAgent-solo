@@ -40,6 +40,34 @@
         </div>
     </div>
 
+    <!-- 核心研究路径 -->
+    <div class="card section-gap">
+        <div class="card-hd">
+            <div>
+                <div class="card-title">开始研究</div>
+                <div class="card-sub">从数据确认到策略回测的主路径</div>
+            </div>
+            <span class="tag tag-ok">一期核心闭环可用</span>
+        </div>
+        <div class="journey">
+            <a class="journey-step" th:href="@{/market}">
+                <span class="journey-index">1</span>
+                <span><strong>查看市场</strong><small>确认行情、估值与技术因子</small></span>
+                <span class="journey-arrow">→</span>
+            </a>
+            <a class="journey-step" th:href="@{/screener}">
+                <span class="journey-index">2</span>
+                <span><strong>构建策略</strong><small>组合因子并保存可复用策略</small></span>
+                <span class="journey-arrow">→</span>
+            </a>
+            <a class="journey-step" th:href="@{/backtest}">
+                <span class="journey-index">3</span>
+                <span><strong>回测检验</strong><small>检查收益、回撤、成本与交易记录</small></span>
+                <span class="journey-arrow">→</span>
+            </a>
+        </div>
+    </div>
+
     <!-- 空库引导 -->
     <div th:if="${stats.isEmpty()}" class="card">
         <div class="card-hd">
@@ -94,24 +122,25 @@
         </table>
     </div>
 
-    <!-- 下一步 -->
+    <!-- 数据维护 -->
     <div class="card section-gap">
         <div class="card-hd">
-            <div class="card-title">下一步</div>
-            <div class="card-sub">当前进度：M2 市场模块（快照 / 列表 / 个股详情）</div>
+            <div class="card-title">数据维护</div>
+            <div class="card-sub">同步任务目前通过命令行触发</div>
         </div>
         <div class="hint">
-            同步通过命令行触发（异步任务框架将随后续版本提供，届时可在页面上直接发起并观察进度）：<br>
             <code>--sync.instruments</code> 同步标的字典 ·
             <code>--sync.init=N</code> 初始化日K（N=0 为全量）·
             <code>--sync.snapshot</code> 同步市场快照 ·
             <code>--sync.indexes</code> 同步指数 ·
-            <code>--sync.incremental</code> 每日增量<br>
-            选股与回测模块按 M3 / M4 逐个落地，完整规划见 <code>docs/ARCHITECTURE.md</code>。
+            <code>--sync.incremental</code> 每日增量 ·
+            <code>--factor.update</code> 更新因子 ·
+            <code>--valuation.update</code> 更新历史估值
         </div>
     </div>
 
 </main>
 
+<div th:replace="~{layout/skeleton :: scripts}"></div>
 </body>
 </html>

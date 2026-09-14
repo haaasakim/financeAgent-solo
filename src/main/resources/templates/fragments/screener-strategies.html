@@ -2,7 +2,7 @@
   已保存策略列表片段：由保存 / 删除策略的 POST 返回，outerHTML 替换 #strategy-list。
 -->
 <div id="strategy-list" class="strategy-list" th:fragment="list" xmlns:th="http://www.thymeleaf.org">
-    <div class="notice" th:if="${notice != null}" th:text="${notice}">已保存</div>
+    <div class="notice notice-success" th:if="${notice != null}" th:text="${notice}">已保存</div>
     <div class="notice" th:if="${errorMessage != null}" th:text="${errorMessage}">保存失败</div>
     <div class="empty" th:if="${#lists.isEmpty(strategies)}">尚未保存策略</div>
 
@@ -20,9 +20,26 @@
             <div class="strategy-item-actions">
                 <a class="btn btn-sm" th:href="@{/backtest(strategyId=${s.id})}">回测</a>
                 <button class="btn btn-sm btn-danger-quiet"
-                        th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})}"
-                        hx-target="#strategy-list" hx-swap="outerHTML">删除</button>
+                        th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})},hx-confirm=|确认删除策略「${s.name}」？删除后不能恢复。|"
+                        hx-include="#selected-strategy-id"
+                        hx-target="#strategy-list" hx-swap="outerHTML"
+                        hx-disabled-elt="this">删除</button>
             </div>
         </div>
     </div>
+
+    <span id="strategy-count" class="card-sub" hx-swap-oob="outerHTML"
+          th:if="${fragmentUpdate}" th:text="|共 ${#lists.size(strategies)} 个|">共 0 个</span>
+    <div id="strategy-source" class="card-sub" hx-swap-oob="outerHTML"
+         th:if="${fragmentUpdate}"
+         th:text="${sourceLabel != null ? sourceLabel : ''}"></div>
+    <span id="strategy-backtest-action" hx-swap-oob="outerHTML" th:if="${fragmentUpdate}">
+        <a class="btn" th:if="${selectedStrategyId != null}"
+           th:href="@{/backtest(strategyId=${selectedStrategyId})}">拿去回测</a>
+        <span class="btn disabled" th:unless="${selectedStrategyId != null}"
+              title="先保存为策略后再回测">拿去回测</span>
+    </span>
+    <input id="selected-strategy-id" type="hidden" name="selectedStrategyId"
+           th:if="${fragmentUpdate}" th:value="${selectedStrategyId}"
+           hx-swap-oob="outerHTML">
 </div>

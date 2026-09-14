@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.haaasaki.financeagent.backtest.BacktestRequest;
 import org.haaasaki.financeagent.backtest.BacktestResultView;
 import org.haaasaki.financeagent.backtest.BacktestService;
@@ -24,6 +26,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 回测模块控制器：参数页、任务提交、进度轮询与结果片段。
@@ -51,14 +54,21 @@ public class BacktestController {
         model.addAttribute("strategies", backtestService.strategies());
         model.addAttribute("benchmarks", backtestService.benchmarks());
         model.addAttribute("taskView", taskView(page, sort, dir));
+        model.addAttribute("selectedTaskId", taskId);
 
         addFormDefaults(model, strategyId);
 
         if (taskId != null) {
-            // 历史回测：用任务保存的参数回显表单，再加载结果；任务不存在或参数损坏时静默保留默认值
-            backtestService.params(taskId).ifPresent(params -> applyFormDefaults(model, params));
             try {
-                attachResult(model, backtestService.result(taskId, 1));
+                // 历史或运行中回测：参数回显后按任务状态恢复结果、进度或失败态。
+                backtestService.params(taskId).ifPresent(params -> applyFormDefaults(model, params));
+                BacktestTask task = backtestService.task(taskId);
+                if (BacktestTask.STATUS_SUCCESS.equals(task.status())) {
+                    attachResult(model, backtestService.result(taskId, 1));
+                } else {
+                    model.addAttribute("currentTask", task);
+                    model.addAttribute("task", task);
+                }
             } catch (BusinessException e) {
                 model.addAttribute("loadError", e.getMessage());
             }
@@ -71,8 +81,21 @@ public class BacktestController {
     public String tasks(@RequestParam(defaultValue = "1") int page,
                         @RequestParam(required = false) String sort,
                         @RequestParam(required = false) String dir,
+                        @RequestParam(required = false) Long taskId,
+                        HttpServletResponse response,
                         Model model) {
-        model.addAttribute("taskView", taskView(page, sort, dir));
+        BacktestTaskView taskView = taskView(page, sort, dir);
+        model.addAttribute("taskView", taskView);
+        model.addAttribute("selectedTaskId", taskId);
+        UriComponentsBuilder url = UriComponentsBuilder.fromPath("/backtest");
+        if (taskId != null) {
+            url.queryParam("taskId", taskId);
+        }
+        response.setHeader("HX-Push-Url", url
+                .queryParam("page", taskView.page())
+                .queryParam("sort", taskView.sort().key())
+                .queryParam("dir", taskView.desc() ? "desc" : "asc")
+                .build().encode().toUriString());
         return "fragments/backtest-recent-tasks";
     }
 
@@ -139,12 +162,14 @@ public class BacktestController {
                       @RequestParam(defaultValue = "0") BigDecimal stopLossPct,
                       @RequestParam(defaultValue = "0") int timeStopDays,
                       @RequestParam String benchmarkId,
+                      HttpServletResponse response,
                       Model model) {
         try {
             long taskId = backtestService.createTask(new BacktestRequest(strategyId, startDate, endDate,
                     frequency, topN, initialCapital, commissionRatePct, stampTaxPct,
                     slippageBps, stopLossPct, timeStopDays, benchmarkId));
             model.addAttribute("task", backtestService.task(taskId));
+            response.setHeader("HX-Push-Url", "/backtest?taskId=" + taskId);
             return "fragments/backtest-progress";
         } catch (BusinessException e) {
             model.addAttribute("message", e.getMessage());

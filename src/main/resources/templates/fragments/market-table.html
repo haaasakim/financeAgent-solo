@@ -3,14 +3,16 @@
   本文件是纯片段模板：没有 html/body 外壳，直接渲染根 div。
   排序字段来自 MarketSortField 白名单；筛选参数由 #market-filters 表单收集。
 -->
-<div id="market-table" th:fragment="table" xmlns:th="http://www.thymeleaf.org">
+<div id="market-table" th:fragment="table" xmlns:th="http://www.thymeleaf.org"
+     aria-live="polite">
     <div class="table-scroll">
         <table>
             <thead>
             <tr>
                 <th th:each="col : ${sortFields}"
                     th:classappend="${(col.numeric() ? 'num ' : '') + (result.isSortedBy(col) ? 'sorted' : '')}">
-                    <a th:hx-get="@{/fragments/market/table(sort=${col.key()},dir=${result.nextDirection(col)})}"
+                    <button type="button" class="table-sort"
+                       th:hx-get="@{/fragments/market/table(sort=${col.key()},dir=${result.nextDirection(col)})}"
                        hx-include="#market-filters"
                        hx-target="#market-table"
                        hx-swap="outerHTML"
@@ -18,7 +20,7 @@
                         <span th:text="${col.label()}">列</span>
                         <span class="arrow"
                               th:text="${result.isSortedBy(col) ? (result.query.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                    </a>
+                    </button>
                 </th>
             </tr>
             </thead>

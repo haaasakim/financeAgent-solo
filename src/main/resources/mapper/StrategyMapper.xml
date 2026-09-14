@@ -35,6 +35,12 @@
         WHERE id = #{id}
     </select>
 
+    <select id="findByName" resultMap="StrategyMap">
+        SELECT id, name, description, dsl
+        FROM strategy
+        WHERE name = #{name}
+    </select>
+
     <delete id="deleteById">
         DELETE FROM strategy WHERE id = #{id}
     </delete>

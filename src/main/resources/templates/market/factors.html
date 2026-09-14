@@ -10,7 +10,10 @@
     <div class="card">
         <div class="card-hd">
             <div class="card-title">
-                <a class="back" th:href="@{/market}">← 市场</a>
+                <a class="back" th:if="${view.instrument != null}"
+                   th:href="@{/market/stock/{id}(id=${instrumentId})}">← 个股详情</a>
+                <a class="back" th:unless="${view.instrument != null}"
+                   th:href="@{/market}">← 市场</a>
                 技术因子
                 <span class="code" th:text="${instrumentId}">000001.SZ</span>
             </div>

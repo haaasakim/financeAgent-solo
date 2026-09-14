@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.stringContainsInOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
@@ -139,6 +140,25 @@ class BacktestControllerTest {
     }
 
     @Test
+    @DisplayName("运行中任务：刷新可由 taskId 恢复进度并继续轮询")
+    void restoresPendingTaskProgress() throws Exception {
+        BacktestParams params = successParams(saveStrategy());
+        BacktestTask pending = new BacktestTask(null, params.strategyId(), params.strategyName(),
+                params.strategyHash(), "1", objectMapper.writeValueAsString(params),
+                BacktestTask.STATUS_PENDING, 0, 0, null, DATA_THROUGH, params.benchmarkId(),
+                params.initialCapital().doubleValue(), null, null, null, null, null, null, null,
+                "2026-09-13T00:00", null, null);
+        backtestTaskMapper.insert(pending);
+        long taskId = backtestTaskMapper.lastInsertId();
+
+        mockMvc.perform(get("/backtest").param("taskId", String.valueOf(taskId)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"bt-progress\"")))
+                .andExpect(content().string(containsString("任务 #" + taskId)))
+                .andExpect(content().string(containsString("hx-trigger=\"every 2s\"")));
+    }
+
+    @Test
     @DisplayName("配对视图搜索：关键词与卖出日过滤，费用合计随命中集合收窄")
     void filtersRoundTripsByKeywordAndSellDate() throws Exception {
         long taskId = insertSuccessTask(saveStrategy());
@@ -197,6 +217,8 @@ class BacktestControllerTest {
         mockMvc.perform(get("/fragments/backtest/tasks")
                         .param("sort", "cumulativeReturn").param("dir", "desc"))
                 .andExpect(status().isOk())
+                .andExpect(header().string("HX-Push-Url",
+                        "/backtest?page=1&sort=cumulativeReturn&dir=desc"))
                 .andExpect(content().string(containsString("sorted")))
                 .andExpect(content().string(stringContainsInOrder("80.00%", "10.00%")));
 

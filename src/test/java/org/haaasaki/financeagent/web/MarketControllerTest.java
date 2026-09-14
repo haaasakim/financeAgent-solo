@@ -3,6 +3,7 @@ package org.haaasaki.financeagent.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.LocalDate;
@@ -91,6 +92,8 @@ class MarketControllerTest {
                         .param("dir", "desc")
                         .header("HX-Request", "true"))
                 .andExpect(status().isOk())
+                .andExpect(header().string("HX-Push-Url",
+                        "/market?sort=amount&dir=desc&page=1&size=20"))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("id=\"market-table\"")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("浦发银行")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(

@@ -16,12 +16,12 @@
     <div class="grid-2">
 
         <!-- 左栏：因子目录 / 预设模板 -->
-        <aside>
+        <aside class="screener-sidebar">
             <div class="card" style="margin-bottom:16px">
                 <div class="card-hd">
                     <div class="card-title">因子目录</div>
                 </div>
-                <div class="card-sub" style="margin-bottom:10px">点击因子加入「全部满足」</div>
+                <div class="card-sub" style="margin-bottom:10px">点击因子快速加入「全部满足」</div>
                 <div class="factor-tabs">
                     <button type="button" class="factor-tab" th:each="group : ${factorGroups}"
                             th:attr="data-group=${group.name}"
@@ -35,11 +35,12 @@
                      th:attr="data-group=${group.name}"
                      x-show="factorTab === $el.dataset.group" x-cloak>
                     <div class="factor">
-                        <span th:each="f : ${group.factors}" th:if="${f.available}"
-                              th:text="${f.label}"
-                              th:attr="data-key=${f.key}"
-                              @click="addCondition($el.dataset.key)"
-                              title="加入全部满足"></span>
+                        <button type="button" class="factor-pill"
+                                th:each="f : ${group.factors}" th:if="${f.available}"
+                                th:text="${f.label}"
+                                th:attr="data-key=${f.key}"
+                                @click="addCondition($el.dataset.key)"
+                                title="加入全部满足"></button>
                         <span th:each="f : ${group.factors}" th:if="${!f.available}"
                               th:text="${f.label}" class="disabled"
                               title="待财报数据源，暂不可用"></span>
@@ -61,7 +62,7 @@
         </aside>
 
         <!-- 右栏：我的策略 / 条件卡片 / 执行 / 结果 -->
-        <div>
+        <div class="screener-workspace">
             <div class="card strategy-workspace" style="margin-bottom:16px">
                 <div class="card-hd">
                     <div>
@@ -69,7 +70,8 @@
                         <div class="card-sub">点击策略名称加载；可直接回测或删除</div>
                     </div>
                     <div class="strategy-header-actions">
-                        <span class="card-sub" th:text="|共 ${#lists.size(strategies)} 个|">共 0 个</span>
+                        <span id="strategy-count" class="card-sub"
+                              th:text="|共 ${#lists.size(strategies)} 个|">共 0 个</span>
                         <a class="btn btn-sm" href="/screener">新建策略</a>
                     </div>
                 </div>
@@ -79,19 +81,30 @@
             <div class="card" style="margin-bottom:16px">
                 <div class="card-hd">
                     <div class="card-title">筛选条件</div>
-                    <div class="card-sub" th:if="${sourceLabel != null}" th:text="${sourceLabel}"></div>
+                    <div id="strategy-source" class="card-sub"
+                         th:text="${sourceLabel != null ? sourceLabel : ''}"></div>
                 </div>
 
                 <template x-for="section in sections" :key="section.key">
                     <div class="logic">
                         <div class="logic-hd">
-                            <span class="logic-tag" :class="section.tag" x-text="section.title"></span>
-                            <span class="logic-note" x-text="section.note"></span>
+                            <span class="logic-title">
+                                <span class="logic-tag" :class="section.tag" x-text="section.title"></span>
+                                <span class="logic-note" x-text="section.note"></span>
+                            </span>
+                            <select class="logic-add"
+                                    :aria-label="'向' + section.title + '添加条件'"
+                                    @change="addConditionTo(section, $event.target.value); $event.target.value = ''">
+                                <option value="">＋ 添加条件</option>
+                                <option th:each="f : ${availableFactors}"
+                                        th:value="${f.key}" th:text="${f.label}"></option>
+                            </select>
                         </div>
 
                         <template x-for="(cond, i) in section.conditions" :key="section.key + '-' + i">
                             <div class="rule">
-                                <select x-model="cond.factor" @change="onFactorChange(section, i)">
+                                <select x-model="cond.factor" @change="onFactorChange(section, i)"
+                                        :aria-label="section.title + '的因子'">
                                     <option th:each="f : ${availableFactors}"
                                             th:value="${f.key}" th:text="${f.label}"></option>
                                 </select>
@@ -99,7 +112,7 @@
                                 <!-- 布尔因子：是 / 否 -->
                                 <template x-if="kindOf(cond.factor) === 'BOOLEAN'">
                                     <span class="rule-inline">
-                                        <select x-model.number="cond.value">
+                                        <select x-model.number="cond.value" aria-label="布尔条件值">
                                             <option :value="1">是</option>
                                             <option :value="0">否</option>
                                         </select>
@@ -110,6 +123,7 @@
                                 <template x-if="kindOf(cond.factor) !== 'BOOLEAN'">
                                     <span class="rule-inline">
                                         <select x-model="cond.op" class="rule-op"
+                                                aria-label="比较运算符"
                                                 @change="onOpChange(cond)">
                                             <option value="gt">&gt;</option>
                                             <option value="gte">≥</option>
@@ -117,7 +131,8 @@
                                             <option value="lte">≤</option>
                                             <option value="eq">=</option>
                                         </select>
-                                        <input type="number" step="any" x-model.number="cond.value">
+                                        <input type="number" step="any" x-model.number="cond.value"
+                                               aria-label="条件阈值">
                                         <span class="unit" x-text="unitOf(cond.factor)"></span>
                                     </span>
                                 </template>
@@ -133,21 +148,23 @@
                                         <template x-if="cond.score">
                                             <span class="rule-inline">
                                                 <select class="rule-dir" x-model="cond.direction"
-                                                        title="评分方向">
+                                                        aria-label="评分方向" title="评分方向">
                                                     <option value="higher">越大越好</option>
                                                     <option value="lower">越小越好</option>
                                                 </select>
                                                 <input type="number" class="rule-weight"
                                                        min="0.1" max="10" step="0.5"
                                                        x-model.number="cond.weight"
+                                                       aria-label="评分权重"
                                                        title="权重 0.1 ~ 10">
                                             </span>
                                         </template>
                                     </span>
                                 </template>
 
-                                <span class="rule-del" @click="section.conditions.splice(i, 1)"
-                                      title="删除条件">×</span>
+                                <button type="button" class="rule-del"
+                                        @click="section.conditions.splice(i, 1)"
+                                        aria-label="删除条件" title="删除条件">×</button>
                             </div>
                         </template>
 
@@ -158,24 +175,28 @@
                 <div class="toolbar" style="margin-top:12px">
                     <form id="screener-form" hx-post="/fragments/screener/results"
                           hx-target="#screener-results" hx-swap="outerHTML"
-                          hx-indicator="#screener-loading">
+                          hx-indicator="#screener-loading" hx-disabled-elt="button[type='submit']">
                         <input type="hidden" name="dsl" :value="dslJson()">
                         <button class="btn btn-primary" type="submit">执行选股</button>
                     </form>
-                    <a class="btn" th:if="${selectedStrategyId != null}"
-                       th:href="@{/backtest(strategyId=${selectedStrategyId})}">拿去回测</a>
-                    <span class="btn disabled" th:unless="${selectedStrategyId != null}"
-                          title="先保存为策略后再回测">拿去回测</span>
+                    <span id="strategy-backtest-action">
+                        <a class="btn" th:if="${selectedStrategyId != null}"
+                           th:href="@{/backtest(strategyId=${selectedStrategyId})}">拿去回测</a>
+                        <span class="btn disabled" th:unless="${selectedStrategyId != null}"
+                              title="先保存为策略后再回测">拿去回测</span>
+                    </span>
                     <form hx-post="/fragments/screener/strategies"
                           hx-target="#strategy-list" hx-swap="outerHTML"
-                          hx-indicator="#strategy-loading">
+                          hx-indicator="#strategy-loading" hx-disabled-elt="button[type='submit']">
                         <input type="hidden" name="dsl" :value="dslJson()">
-                        <input type="hidden" name="selectedStrategyId" th:value="${selectedStrategyId}">
-                        <input type="text" name="name" placeholder="策略名" maxlength="50">
+                        <input id="selected-strategy-id" type="hidden" name="selectedStrategyId"
+                               th:value="${selectedStrategyId}">
+                        <input type="text" name="name" placeholder="策略名" maxlength="50"
+                               aria-label="策略名">
                         <button class="btn" type="submit">保存为策略</button>
                     </form>
-                    <span id="screener-loading" class="card-sub htmx-indicator">计算中…</span>
-                    <span id="strategy-loading" class="card-sub htmx-indicator">保存中…</span>
+                    <span id="screener-loading" class="card-sub htmx-indicator" aria-live="polite">计算中…</span>
+                    <span id="strategy-loading" class="card-sub htmx-indicator" aria-live="polite">保存中…</span>
                 </div>
             </div>
 
@@ -183,7 +204,7 @@
                 <div class="card-hd">
                     <div class="card-title">选股结果</div>
                 </div>
-                <div id="screener-results">
+                <div id="screener-results" aria-live="polite">
                     <div class="empty">设置条件后点击「执行选股」</div>
                 </div>
             </div>

@@ -9,11 +9,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 /**
  * 首页：本地数据总览。
  *
- * <p>M1 只有数据层，页面的职责是让「数据到底同步到什么程度」一眼可见，
- * 而不是展示行情。市场 / 选股 / 回测三个模块从 M2 起逐个落地。
+ * <p>页面让「数据同步到什么程度」一眼可见，并提供市场 → 选股 → 回测的主路径入口。
  *
  * <p>本页只读，不提供同步按钮——同步目前是命令行触发，
- * 异步任务框架（可在页面上触发并观察进度）在 M2 提供。
+ * 数据同步仍由命令行触发。
  */
 @Controller
 public class DashboardController {

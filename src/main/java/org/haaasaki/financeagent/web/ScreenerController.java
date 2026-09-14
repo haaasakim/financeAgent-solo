@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletResponse;
 
 import org.haaasaki.financeagent.common.exception.BusinessException;
 import org.haaasaki.financeagent.data.model.Strategy;
@@ -64,6 +65,7 @@ public class ScreenerController {
             } catch (BusinessException e) {
                 log.warn("加载策略失败 strategyId={}：{}", strategyId, e.getMessage());
                 sourceLabel = "策略不存在，已重置条件";
+                strategyId = null;
             }
         } else if (template != null) {
             StrategyTemplate preset = presetTemplates.find(template);
@@ -103,28 +105,57 @@ public class ScreenerController {
                                @RequestParam(required = false) String description,
                                @RequestParam String dsl,
                                @RequestParam(required = false) Long selectedStrategyId,
+                               HttpServletResponse response,
                                Model model) {
+        String sourceLabel = selectedStrategyLabel(selectedStrategyId);
         try {
-            screenerService.saveStrategy(name, description, dsl);
-            model.addAttribute("notice", "已保存策略：" + name.trim());
+            Strategy saved = screenerService.saveStrategy(name, description, dsl);
+            selectedStrategyId = saved.id();
+            sourceLabel = "已保存策略：" + saved.name();
+            response.setHeader("HX-Replace-Url", "/screener?strategyId=" + saved.id());
+            model.addAttribute("notice", sourceLabel);
         } catch (BusinessException e) {
             log.warn("保存策略失败：{}", e.getMessage());
             model.addAttribute("errorMessage", e.getMessage());
         }
         model.addAttribute("strategies", screenerService.listStrategies());
         model.addAttribute("selectedStrategyId", selectedStrategyId);
+        model.addAttribute("sourceLabel", sourceLabel);
+        model.addAttribute("fragmentUpdate", true);
         return "fragments/screener-strategies";
     }
 
     @PostMapping("/fragments/screener/strategies/{id}/delete")
     public String deleteStrategy(@PathVariable long id,
                                  @RequestParam(required = false) Long selectedStrategyId,
+                                 HttpServletResponse response,
                                  Model model) {
         screenerService.deleteStrategy(id);
-        model.addAttribute("notice", "已删除策略");
+        boolean deletedCurrent = selectedStrategyId != null && selectedStrategyId == id;
+        if (deletedCurrent) {
+            selectedStrategyId = null;
+            response.setHeader("HX-Replace-Url", "/screener");
+            model.addAttribute("notice", "已删除策略；当前条件仍保留，但尚未保存");
+            model.addAttribute("sourceLabel", "当前条件尚未保存");
+        } else {
+            model.addAttribute("notice", "已删除策略");
+            model.addAttribute("sourceLabel", selectedStrategyLabel(selectedStrategyId));
+        }
         model.addAttribute("strategies", screenerService.listStrategies());
         model.addAttribute("selectedStrategyId", selectedStrategyId);
+        model.addAttribute("fragmentUpdate", true);
         return "fragments/screener-strategies";
+    }
+
+    private String selectedStrategyLabel(Long selectedStrategyId) {
+        if (selectedStrategyId == null) {
+            return null;
+        }
+        try {
+            return "已加载策略：" + screenerService.findStrategy(selectedStrategyId).name();
+        } catch (BusinessException e) {
+            return null;
+        }
     }
 
     /** 页面条件行的因子下拉选项（灰显因子不参与）。 */

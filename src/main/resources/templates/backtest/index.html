@@ -19,27 +19,27 @@
 
         <form id="bt-form" hx-post="/fragments/backtest/run"
               hx-target="#bt-run-area" hx-swap="innerHTML"
-              hx-indicator="#bt-loading">
+              hx-indicator="#bt-loading" hx-disabled-elt="button[type='submit']">
             <div class="form-grid">
                 <div class="field">
-                    <label>策略</label>
-                    <select name="strategyId" required>
+                    <label for="bt-strategy">策略</label>
+                    <select id="bt-strategy" name="strategyId" required>
                         <option value="">选择策略</option>
                         <option th:each="s : ${strategies}" th:value="${s.id}" th:text="${s.name}"
                                 th:selected="${selectedStrategyId != null and selectedStrategyId == s.id}"></option>
                     </select>
                 </div>
                 <div class="field">
-                    <label>开始日期</label>
-                    <input type="date" name="startDate" required th:value="${defaultStart}">
+                    <label for="bt-start-date">开始日期</label>
+                    <input id="bt-start-date" type="date" name="startDate" required th:value="${defaultStart}">
                 </div>
                 <div class="field">
-                    <label>结束日期</label>
-                    <input type="date" name="endDate" required th:value="${defaultEnd}">
+                    <label for="bt-end-date">结束日期</label>
+                    <input id="bt-end-date" type="date" name="endDate" required th:value="${defaultEnd}">
                 </div>
                 <div class="field">
-                    <label>调仓频率</label>
-                    <select name="frequency">
+                    <label for="bt-frequency">调仓频率</label>
+                    <select id="bt-frequency" name="frequency">
                         <option value="DAILY" th:selected="${selectedFrequency == 'DAILY'}">每日</option>
                         <option value="WEEKLY" th:selected="${selectedFrequency == 'WEEKLY'}">每周</option>
                         <option value="MONTHLY" th:selected="${selectedFrequency == 'MONTHLY'}">每月</option>
@@ -47,8 +47,8 @@
                     </select>
                 </div>
                 <div class="field">
-                    <label>持仓数量（1 ~ 100，等权）</label>
-                    <input type="number" name="topN" th:value="${selectedTopN}"
+                    <label for="bt-top-n">持仓数量（1 ~ 100，等权）</label>
+                    <input id="bt-top-n" type="number" name="topN" th:value="${selectedTopN}"
                            min="1" max="100" step="1" list="topn-presets">
                     <datalist id="topn-presets">
                         <option value="10"></option>
@@ -58,38 +58,38 @@
                     </datalist>
                 </div>
                 <div class="field">
-                    <label>初始资金（元）</label>
-                    <input type="number" name="initialCapital" th:value="${defaultInitialCapital}"
+                    <label for="bt-initial-capital">初始资金（元）</label>
+                    <input id="bt-initial-capital" type="number" name="initialCapital" th:value="${defaultInitialCapital}"
                            min="1000" step="1000">
                 </div>
                 <div class="field">
-                    <label>佣金率（%）</label>
-                    <input type="number" name="commissionRatePct" th:value="${defaultCommissionRatePct}"
+                    <label for="bt-commission">佣金率（%）</label>
+                    <input id="bt-commission" type="number" name="commissionRatePct" th:value="${defaultCommissionRatePct}"
                            min="0" max="1" step="0.001">
                 </div>
                 <div class="field">
-                    <label>印花税（%，卖出）</label>
-                    <input type="number" name="stampTaxPct" th:value="${defaultStampTaxPct}"
+                    <label for="bt-stamp-tax">印花税（%，卖出）</label>
+                    <input id="bt-stamp-tax" type="number" name="stampTaxPct" th:value="${defaultStampTaxPct}"
                            min="0" max="1" step="0.001">
                 </div>
                 <div class="field">
-                    <label>滑点（bps）</label>
-                    <input type="number" name="slippageBps" th:value="${defaultSlippageBps}"
+                    <label for="bt-slippage">滑点（bps）</label>
+                    <input id="bt-slippage" type="number" name="slippageBps" th:value="${defaultSlippageBps}"
                            min="0" max="100" step="1">
                 </div>
                 <div class="field">
-                    <label>止损（%，0 关闭）</label>
-                    <input type="number" name="stopLossPct" th:value="${defaultStopLossPct}"
+                    <label for="bt-stop-loss">止损（%，0 关闭）</label>
+                    <input id="bt-stop-loss" type="number" name="stopLossPct" th:value="${defaultStopLossPct}"
                            min="0" max="50" step="1">
                 </div>
                 <div class="field">
-                    <label>时间止损（交易日，0 关闭）</label>
-                    <input type="number" name="timeStopDays" th:value="${defaultTimeStopDays}"
+                    <label for="bt-time-stop">时间止损（交易日，0 关闭）</label>
+                    <input id="bt-time-stop" type="number" name="timeStopDays" th:value="${defaultTimeStopDays}"
                            min="0" max="250" step="1">
                 </div>
                 <div class="field">
-                    <label>基准</label>
-                    <select name="benchmarkId">
+                    <label for="bt-benchmark">基准</label>
+                    <select id="bt-benchmark" name="benchmarkId">
                         <option th:each="b : ${benchmarks}" th:value="${b.instrumentId}"
                                 th:text="${b.name}"
                                 th:selected="${selectedBenchmarkId == b.instrumentId}"></option>
@@ -102,7 +102,7 @@
                         th:disabled="${#lists.isEmpty(strategies) or #lists.isEmpty(benchmarks)}">
                     开始回测
                 </button>
-                <span id="bt-loading" class="card-sub htmx-indicator">提交中…</span>
+                <span id="bt-loading" class="card-sub htmx-indicator" aria-live="polite">提交中…</span>
                 <span class="card-sub" th:if="${#lists.isEmpty(strategies)}">
                     还没有已保存策略，先到「选股」页保存一个
                 </span>
@@ -113,8 +113,14 @@
         </form>
     </div>
 
-    <div id="bt-run-area">
+    <div id="bt-run-area" aria-live="polite">
         <div th:if="${loadError != null}" class="notice" th:text="${loadError}">--</div>
+        <div th:if="${currentTask != null}">
+            <div th:if="${currentTask.status == 'FAILED'}"
+                 th:replace="~{fragments/backtest-failed :: failed}"></div>
+            <div th:unless="${currentTask.status == 'FAILED'}"
+                 th:replace="~{fragments/backtest-progress :: progress}"></div>
+        </div>
         <div th:if="${result != null}">
             <div th:replace="~{fragments/backtest-result :: result}"></div>
         </div>

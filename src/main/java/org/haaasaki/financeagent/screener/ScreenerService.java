@@ -330,7 +330,7 @@ public class ScreenerService {
     }
 
     /** 保存策略：先校验条件树可执行；同名覆盖更新。 */
-    public void saveStrategy(String name, String description, String dslJson) {
+    public Strategy saveStrategy(String name, String description, String dslJson) {
         if (name == null || name.isBlank()) {
             throw new BusinessException("策略名不能为空");
         }
@@ -341,6 +341,8 @@ public class ScreenerService {
         ScreenerDsl dsl = parse(dslJson);
         DslValidator.validate(dsl, factorRegistry);
         strategyMapper.upsert(trimmedName, description, dslJson);
+        return strategyMapper.findByName(trimmedName)
+                .orElseThrow(() -> new IllegalStateException("策略保存后无法读取"));
     }
 
     public void deleteStrategy(long id) {

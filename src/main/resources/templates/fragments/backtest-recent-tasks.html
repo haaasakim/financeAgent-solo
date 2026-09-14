@@ -3,12 +3,18 @@
   排序字段来自 BacktestTaskSort 白名单（未知键回退编号降序）；分页与排序通过 HTMX 局部刷新，
   排在指标列为空（排队 / 运行中 / 失败）的任务之后。
 -->
-<div id="bt-tasks" th:fragment="recent" xmlns:th="http://www.thymeleaf.org">
+<div id="bt-tasks" th:fragment="recent" xmlns:th="http://www.thymeleaf.org"
+     hx-include="#bt-task-context" hx-indicator="#bt-task-loading">
+
+    <input id="bt-task-context" type="hidden" name="taskId" th:value="${selectedTaskId}">
 
     <div class="card" style="margin-top:16px">
         <div class="card-hd">
             <div class="card-title">回测记录</div>
-            <div class="card-sub" th:text="|共 ${taskView.total} 条|">--</div>
+            <div>
+                <span id="bt-task-loading" class="card-sub htmx-indicator" aria-live="polite">加载中…</span>
+                <span class="card-sub" th:text="|共 ${taskView.total} 条|">--</span>
+            </div>
         </div>
 
         <div class="pager" style="padding-top:0;padding-bottom:10px">
@@ -28,12 +34,12 @@
                 <thead>
                 <tr>
                     <th th:classappend="${taskView.isSortedBy('id')} ? 'sorted' : ''">
-                        <a th:hx-get="@{/fragments/backtest/tasks(page=1,sort='id',dir=${taskView.nextDirection('id')} ? 'desc' : 'asc')}"
+                        <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='id',dir=${taskView.nextDirection('id')} ? 'desc' : 'asc')}"
                            hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>编号</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('id') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                        </a>
+                        </button>
                     </th>
                     <th>策略</th>
                     <th>调仓频率</th>
@@ -42,39 +48,39 @@
                     <th>状态</th>
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('cumulativeReturn')} ? 'sorted' : ''">
-                        <a th:hx-get="@{/fragments/backtest/tasks(page=1,sort='cumulativeReturn',dir=${taskView.nextDirection('cumulativeReturn')} ? 'desc' : 'asc')}"
+                        <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='cumulativeReturn',dir=${taskView.nextDirection('cumulativeReturn')} ? 'desc' : 'asc')}"
                            hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>累计收益</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('cumulativeReturn') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                        </a>
+                        </button>
                     </th>
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('annualReturn')} ? 'sorted' : ''">
-                        <a th:hx-get="@{/fragments/backtest/tasks(page=1,sort='annualReturn',dir=${taskView.nextDirection('annualReturn')} ? 'desc' : 'asc')}"
+                        <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='annualReturn',dir=${taskView.nextDirection('annualReturn')} ? 'desc' : 'asc')}"
                            hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>年化收益</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('annualReturn') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                        </a>
+                        </button>
                     </th>
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('maxDrawdown')} ? 'sorted' : ''">
-                        <a th:hx-get="@{/fragments/backtest/tasks(page=1,sort='maxDrawdown',dir=${taskView.nextDirection('maxDrawdown')} ? 'desc' : 'asc')}"
+                        <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='maxDrawdown',dir=${taskView.nextDirection('maxDrawdown')} ? 'desc' : 'asc')}"
                            hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>最大回撤</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('maxDrawdown') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                        </a>
+                        </button>
                     </th>
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('sharpe')} ? 'sorted' : ''">
-                        <a th:hx-get="@{/fragments/backtest/tasks(page=1,sort='sharpe',dir=${taskView.nextDirection('sharpe')} ? 'desc' : 'asc')}"
+                        <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='sharpe',dir=${taskView.nextDirection('sharpe')} ? 'desc' : 'asc')}"
                            hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>夏普</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('sharpe') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
-                        </a>
+                        </button>
                     </th>
                     <th>创建时间</th>
                     <th></th>
@@ -93,7 +99,7 @@
                     <td>
                         <span th:switch="${t.task.status}">
                             <span th:case="'SUCCESS'" class="flat">成功</span>
-                            <span th:case="'FAILED'" class="down">失败</span>
+                            <span th:case="'FAILED'" class="risk">失败</span>
                             <span th:case="'RUNNING'" th:text="|运行中 ${t.task.progressDone}/${t.task.progressTotal}|">运行中</span>
                             <span th:case="*">排队中</span>
                         </span>
@@ -103,7 +109,7 @@
                         th:text="${t.task.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.task.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num"
                         th:text="${t.task.annualReturn != null} ? ${#numbers.formatDecimal(t.task.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
-                    <td class="num down"
+                    <td class="num risk"
                         th:text="${t.task.maxDrawdown != null} ? ${#numbers.formatDecimal(t.task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num"
                         th:text="${t.task.sharpe != null} ? ${#numbers.formatDecimal(t.task.sharpe, 1, 2)} : '--'">--</td>

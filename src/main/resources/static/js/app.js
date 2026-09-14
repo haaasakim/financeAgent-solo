@@ -225,7 +225,7 @@
 
     var primary = cssVar('--primary') || '#185FA5';
     var text3 = cssVar('--text-3') || '#888780';
-    var down = cssVar('--down') || '#1D9E75';
+    var risk = cssVar('--risk') || '#C2413A';
     var grid = cssVar('--border') || '#E5E5E1';
 
     charts.btNav = echarts.init(el);
@@ -280,8 +280,8 @@
         series: [
           {
             name: '回撤', type: 'line', data: data.drawdown, symbol: 'none',
-            lineStyle: { width: 1, color: down },
-            areaStyle: { color: down, opacity: 0.12 }
+            lineStyle: { width: 1, color: risk },
+            areaStyle: { color: risk, opacity: 0.12 }
           }
         ]
       });
@@ -394,6 +394,21 @@ function screenerApp(factors, initial) {
     });
   }
 
+  function newCondition(key, scorable) {
+    var kind = kindOf(key);
+    var condition = {
+      factor: key,
+      op: kind === 'BOOLEAN' ? 'eq' : 'gte',
+      value: kind === 'BOOLEAN' ? 1 : 0
+    };
+    if (kind !== 'BOOLEAN' && scorable) {
+      condition.score = true;
+      condition.weight = 1;
+      condition.direction = defaultDirection(condition.op);
+    }
+    return condition;
+  }
+
   return {
     /* 因子目录当前分组标签页（WI-012 后目录变长，改为分组切换） */
     factorTab: '基础',
@@ -414,21 +429,13 @@ function screenerApp(factors, initial) {
       return (factorMap[key] || {}).unit || '';
     },
     addCondition: function (key) {
-      if (!key) {
+      this.addConditionTo(this.sections[0], key);
+    },
+    addConditionTo: function (section, key) {
+      if (!section || !key) {
         return;
       }
-      var kind = this.kindOf(key);
-      var condition = {
-        factor: key,
-        op: kind === 'BOOLEAN' ? 'eq' : 'gte',
-        value: kind === 'BOOLEAN' ? 1 : 0
-      };
-      if (kind !== 'BOOLEAN') {
-        condition.score = true;
-        condition.weight = 1;
-        condition.direction = defaultDirection(condition.op);
-      }
-      this.sections[0].conditions.push(condition);
+      section.conditions.push(newCondition(key, section.scorable));
     },
     onFactorChange: function (section, index) {
       var condition = section.conditions[index];

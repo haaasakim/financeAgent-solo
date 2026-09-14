@@ -39,11 +39,12 @@
 
         <form id="market-filters" class="toolbar" onsubmit="return false">
             <input type="text" name="keyword" placeholder="搜索代码或名称"
+                   aria-label="搜索代码或名称"
                    th:value="${result.query.keyword}"
                    hx-get="/fragments/market/table" hx-trigger="input changed delay:400ms, search"
                    hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
                    hx-indicator="#market-loading">
-            <select name="board"
+            <select name="board" aria-label="板块筛选"
                     hx-get="/fragments/market/table" hx-trigger="change"
                     hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
                     hx-indicator="#market-loading">
@@ -54,7 +55,7 @@
                 <option value="BSE" th:selected="${result.query.board == 'BSE'}">北交所</option>
                 <option value="ETF" th:selected="${result.query.board == 'ETF'}">ETF</option>
             </select>
-            <select name="type"
+            <select name="type" aria-label="标的类型筛选"
                     hx-get="/fragments/market/table" hx-trigger="change"
                     hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
                     hx-indicator="#market-loading">
@@ -62,7 +63,7 @@
                 <option value="STOCK" th:selected="${result.query.instrumentType == 'STOCK'}">股票</option>
                 <option value="ETF" th:selected="${result.query.instrumentType == 'ETF'}">ETF</option>
             </select>
-            <select name="size" class="size-select"
+            <select name="size" class="size-select" aria-label="每页条数"
                     hx-get="/fragments/market/table" hx-trigger="change"
                     hx-include="#market-filters" hx-target="#market-table" hx-swap="outerHTML"
                     hx-indicator="#market-loading">

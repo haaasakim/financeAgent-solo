@@ -2,6 +2,8 @@ package org.haaasaki.financeagent.web;
 
 import java.util.Optional;
 
+import jakarta.servlet.http.HttpServletResponse;
+
 import org.haaasaki.financeagent.market.KlineRange;
 import org.haaasaki.financeagent.market.MarketListQuery;
 import org.haaasaki.financeagent.market.MarketQueryService;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 市场模块控制器：市场列表页、个股详情页、HTMX 表格片段。
@@ -56,11 +59,33 @@ public class MarketController {
                                 @RequestParam(required = false) String dir,
                                 @RequestParam(defaultValue = "1") int page,
                                 @RequestParam(defaultValue = "20") int size,
+                                HttpServletResponse response,
                                 Model model) {
-        model.addAttribute("result", marketQueryService.list(
-                MarketListQuery.of(keyword, board, type, sort, dir, page, size)));
+        MarketListQuery query = MarketListQuery.of(keyword, board, type, sort, dir, page, size);
+        model.addAttribute("result", marketQueryService.list(query));
         model.addAttribute("sortFields", MarketSortField.values());
+        response.setHeader("HX-Push-Url", marketUrl(query));
         return "fragments/market-table";
+    }
+
+    private String marketUrl(MarketListQuery query) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/market");
+        if (query.keyword() != null) {
+            builder.queryParam("keyword", query.keyword());
+        }
+        if (query.board() != null) {
+            builder.queryParam("board", query.board());
+        }
+        if (query.instrumentType() != null) {
+            builder.queryParam("type", query.instrumentType());
+        }
+        return builder.queryParam("sort", query.sort().key())
+                .queryParam("dir", query.desc() ? "desc" : "asc")
+                .queryParam("page", query.page())
+                .queryParam("size", query.size())
+                .build()
+                .encode()
+                .toUriString();
     }
 
     @GetMapping("/market/stock/{instrumentId}")
