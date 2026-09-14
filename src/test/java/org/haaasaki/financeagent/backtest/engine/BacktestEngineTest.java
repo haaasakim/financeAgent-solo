@@ -396,7 +396,7 @@ class BacktestEngineTest {
     private FactorDaily factor(String id, LocalDate date, double return20) {
         return new FactorDaily(id, date, 10.0, 10.0, 10.0, 10.0,
                 0.0, 0.0, 0.0, 50.0, 50.0, 50.0,
-                return20, return20, 0.02, -0.10);
+                return20, return20, 0.02, -0.10, null, null, null, null, null, null, null, null, null);
     }
 
     private ValuationDaily valuation(String id, LocalDate date, double peTtm) {

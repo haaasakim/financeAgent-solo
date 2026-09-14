@@ -117,8 +117,12 @@ erDiagram
 禁止用 `float`。禁止用 `double` 做资金累加。
 
 **因子口径**：`factor_daily` 的技术指标定义（窗口、公式、缺失语义）以
-`docs/work-items/WI-003-指标计算与因子表.md` 第 2.2 节为准；全部基于前复权收盘价，
+`docs/work-items/WI-003-指标计算与因子表.md` 第 2.2 节（v1 收盘价因子）与
+`docs/work-items/WI-012-因子扩充v2.md` 第 2.2 节（v2 量价与位置因子）为准；
+价格类基于前复权收盘价，量能类基于 `daily_bar.volume`（股），
 按标的自身 bar 序列滚动（不对齐日历），回看不足的列保持 NULL。
+`daily_bar.amount` 与 `daily_bar.turnover_rate` 当前恒为 NULL（数据源未提供），
+换手率 / 成交额因子待数据源补全后再定口径。
 
 **估值口径**：`valuation_daily` 存逐日 PE-TTM / PB-MRQ（东财数据中心），单位为倍；
 非正值（亏损、负净资产）视为无效，**存 NULL，禁止填 0**。历史截面回测以当日

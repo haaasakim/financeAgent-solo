@@ -21,7 +21,17 @@ public class FactorRegistry {
 
     /** 固定分组顺序。 */
     private static final List<String> GROUP_ORDER =
-            List.of("基础", "估值", "质量", "成长", "趋势", "风险");
+            List.of("基础", "估值", "质量", "成长", "趋势", "量能", "风险");
+
+    /** 最新截面收盘价子查询（乖离 / 站上均线类因子的白名单表达式片段）。 */
+    private static final String LATEST_CLOSE =
+            "(SELECT d.close FROM daily_bar d WHERE d.instrument_id = i.instrument_id"
+                    + " ORDER BY d.trade_date DESC LIMIT 1)";
+
+    /** 历史截面（信号日）收盘价子查询，仅用于回测表达式。 */
+    private static final String SIGNAL_CLOSE =
+            "(SELECT d.close FROM daily_bar d WHERE d.instrument_id = i.instrument_id"
+                    + " AND d.trade_date = f.trade_date)";
 
     private final List<FactorDefinition> definitions;
     private final Map<String, FactorDefinition> byKey;
@@ -81,12 +91,56 @@ public class FactorRegistry {
                         "CASE WHEN f.ma20 > f.ma60 THEN 1 ELSE 0 END",
                         "CASE WHEN f.ma20 > f.ma60 THEN 1 ELSE 0 END",
                         "", true),
+                new FactorDefinition("ma5GtMa10GtMa20", "趋势", "MA5 > MA10 > MA20", FactorKind.BOOLEAN,
+                        "CASE WHEN f.ma5 > f.ma10 AND f.ma10 > f.ma20 THEN 1 ELSE 0 END",
+                        "CASE WHEN f.ma5 > f.ma10 AND f.ma10 > f.ma20 THEN 1 ELSE 0 END",
+                        "", true),
+                new FactorDefinition("bias20", "趋势", "偏离 MA20", FactorKind.NUMBER,
+                        "((" + LATEST_CLOSE + ") / f.ma20 - 1) * 100",
+                        "((" + SIGNAL_CLOSE + ") / f.ma20 - 1) * 100",
+                        "%", true),
+                new FactorDefinition("bias60", "趋势", "偏离 MA60", FactorKind.NUMBER,
+                        "((" + LATEST_CLOSE + ") / f.ma60 - 1) * 100",
+                        "((" + SIGNAL_CLOSE + ") / f.ma60 - 1) * 100",
+                        "%", true),
+                new FactorDefinition("aboveMa20", "趋势", "站上 MA20", FactorKind.BOOLEAN,
+                        "CASE WHEN (" + LATEST_CLOSE + ") > f.ma20 THEN 1 ELSE 0 END",
+                        "CASE WHEN (" + SIGNAL_CLOSE + ") > f.ma20 THEN 1 ELSE 0 END",
+                        "", true),
+                new FactorDefinition("rsi6", "趋势", "RSI6", FactorKind.NUMBER,
+                        "f.rsi6", "f.rsi6", "", true),
+                new FactorDefinition("rsi12", "趋势", "RSI12", FactorKind.NUMBER,
+                        "f.rsi12", "f.rsi12", "", true),
+                new FactorDefinition("rsi24", "趋势", "RSI24", FactorKind.NUMBER,
+                        "f.rsi24", "f.rsi24", "", true),
+                new FactorDefinition("macdHist", "趋势", "MACD 柱", FactorKind.NUMBER,
+                        "f.macd_hist", "f.macd_hist", "元", true),
+                new FactorDefinition("newHigh60", "趋势", "创 60 日新高", FactorKind.BOOLEAN,
+                        "f.new_high_60", "f.new_high_60", "", true),
+                new FactorDefinition("newHigh120", "趋势", "创 120 日新高", FactorKind.BOOLEAN,
+                        "f.new_high_120", "f.new_high_120", "", true),
+
+                // 量能（WI-012，factor_daily v2）
+                new FactorDefinition("volumeRatio5", "量能", "量比（5 日）", FactorKind.NUMBER,
+                        "f.volume_ratio_5", "f.volume_ratio_5", "倍", true),
+                new FactorDefinition("volumeRatio20", "量能", "量比（20 日）", FactorKind.NUMBER,
+                        "f.volume_ratio_20", "f.volume_ratio_20", "倍", true),
+                new FactorDefinition("volChg20", "量能", "量能变化（5/20）", FactorKind.NUMBER,
+                        "(f.vol_chg_20 * 100)", "(f.vol_chg_20 * 100)", "%", true),
 
                 // 风险
                 new FactorDefinition("volatility20", "风险", "20 日波动率", FactorKind.NUMBER,
                         "(f.volatility_20 * 100)", "(f.volatility_20 * 100)", "%", true),
+                new FactorDefinition("downsideVol20", "风险", "下行波动率", FactorKind.NUMBER,
+                        "(f.downside_vol_20 * 100)", "(f.downside_vol_20 * 100)", "%", true),
+                new FactorDefinition("atr20", "风险", "ATR20（波幅比）", FactorKind.NUMBER,
+                        "(f.atr_20 * 100)", "(f.atr_20 * 100)", "%", true),
+                new FactorDefinition("amplitude20", "风险", "20 日平均振幅", FactorKind.NUMBER,
+                        "(f.amplitude_20 * 100)", "(f.amplitude_20 * 100)", "%", true),
                 new FactorDefinition("pctFrom52wHigh", "风险", "距 52 周高点", FactorKind.NUMBER,
-                        "(f.pct_from_52w_high * 100)", "(f.pct_from_52w_high * 100)", "%", true));
+                        "(f.pct_from_52w_high * 100)", "(f.pct_from_52w_high * 100)", "%", true),
+                new FactorDefinition("pctFrom52wLow", "风险", "距 52 周低点", FactorKind.NUMBER,
+                        "(f.pct_from_52w_low * 100)", "(f.pct_from_52w_low * 100)", "%", true));
 
         this.definitions = List.copyOf(list);
         Map<String, FactorDefinition> map = new LinkedHashMap<>();

@@ -265,6 +265,6 @@ class ScreenerControllerTest {
     private FactorDaily factor(String id, double return20) {
         return new FactorDaily(id, TRADE_DATE, 10.0, 10.0, 10.0, 10.0,
                 0.0, 0.0, 0.0, 50.0, 50.0, 50.0,
-                return20, return20, 0.01, -0.05);
+                return20, return20, 0.01, -0.05, null, null, null, null, null, null, null, null, null);
     }
 }

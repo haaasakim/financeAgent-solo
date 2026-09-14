@@ -9,14 +9,17 @@ import org.haaasaki.financeagent.data.model.FactorDaily;
 /**
  * 因子组装器：把一只标的的日K序列转换成 {@link FactorDaily} 行。
  *
- * <p>契约参数（WI-003 冻结）：
+ * <p>契约参数（WI-003 冻结，WI-012 扩展）：
  * <ul>
  *   <li>均线窗口：5 / 10 / 20 / 60</li>
  *   <li>MACD：(12, 26, 9)，HIST = DIF - DEA</li>
  *   <li>RSI：6 / 12 / 24</li>
  *   <li>收益：20 / 60 交易日</li>
- *   <li>波动率：20 个日收益率，样本标准差，未年化</li>
- *   <li>距 52 周高点：近 250 根 bar 最高收盘</li>
+ *   <li>波动率：20 个日收益率，样本标准差，未年化；下行波动率：同窗口中负收益的样本标准差</li>
+ *   <li>距 52 周高点 / 低点：近 250 根 bar 最高 / 最低收盘</li>
+ *   <li>量比：5 / 20 日；量能变化：5 日均量 / 20 日均量 - 1</li>
+ *   <li>ATR20 / 振幅20：真实波幅与振幅的 20 根简单均值</li>
+ *   <li>新高：60 / 120 根窗口</li>
  * </ul>
  *
  * <p>纯函数：无 I/O、无状态、不依赖时钟；一次遍历组装全部列，避免重复求值。
@@ -30,6 +33,14 @@ public final class FactorCalculator {
     public static final int VOLATILITY_PERIOD = 20;
     /** 52 周约 250 个交易日。 */
     public static final int HIGH_WINDOW = 250;
+    /** 量比 / 量能变化窗口。 */
+    public static final int VOLUME_SHORT_WINDOW = 5;
+    public static final int VOLUME_LONG_WINDOW = 20;
+    /** ATR / 振幅窗口。 */
+    public static final int RANGE_PERIOD = 20;
+    /** 新高窗口。 */
+    public static final int NEW_HIGH_SHORT_WINDOW = 60;
+    public static final int NEW_HIGH_LONG_WINDOW = 120;
 
     private FactorCalculator() {
     }
@@ -44,8 +55,17 @@ public final class FactorCalculator {
         }
 
         double[] closes = new double[bars.size()];
+        double[] highs = new double[bars.size()];
+        double[] lows = new double[bars.size()];
+        long[] volumes = new long[bars.size()];
+        Double[] preCloses = new Double[bars.size()];
         for (int i = 0; i < bars.size(); i++) {
-            closes[i] = bars.get(i).close();
+            DailyBar bar = bars.get(i);
+            closes[i] = bar.close();
+            highs[i] = bar.high();
+            lows[i] = bar.low();
+            volumes[i] = bar.volume();
+            preCloses[i] = bar.preClose();
         }
 
         Double[] ma5 = MovingAverage.sma(closes, MA_WINDOWS[0]);
@@ -60,6 +80,15 @@ public final class FactorCalculator {
         Double[] return60 = Returns.simple(closes, RETURN_LONG);
         Double[] volatility20 = Volatility.ofReturns(closes, VOLATILITY_PERIOD);
         Double[] pctFromHigh = PricePosition.pctFromHigh(closes, HIGH_WINDOW);
+        Double[] volumeRatio5 = VolumeStats.ratio(volumes, VOLUME_SHORT_WINDOW);
+        Double[] volumeRatio20 = VolumeStats.ratio(volumes, VOLUME_LONG_WINDOW);
+        Double[] volChg20 = VolumeStats.change(volumes, VOLUME_SHORT_WINDOW, VOLUME_LONG_WINDOW);
+        Double[] atr20 = Atr.ratio(highs, lows, closes, preCloses, RANGE_PERIOD);
+        Double[] amplitude20 = Amplitude.mean(highs, lows, preCloses, RANGE_PERIOD);
+        Double[] downsideVol20 = DownsideVolatility.ofReturns(closes, VOLATILITY_PERIOD);
+        Double[] pctFromLow = PricePosition.pctFromLow(closes, HIGH_WINDOW);
+        Double[] newHigh60 = PricePosition.newHigh(closes, NEW_HIGH_SHORT_WINDOW);
+        Double[] newHigh120 = PricePosition.newHigh(closes, NEW_HIGH_LONG_WINDOW);
 
         List<FactorDaily> rows = new ArrayList<>(bars.size());
         for (int i = 0; i < bars.size(); i++) {
@@ -80,7 +109,16 @@ public final class FactorCalculator {
                     return20[i],
                     return60[i],
                     volatility20[i],
-                    pctFromHigh[i]));
+                    pctFromHigh[i],
+                    volumeRatio5[i],
+                    volumeRatio20[i],
+                    volChg20[i],
+                    atr20[i],
+                    amplitude20[i],
+                    downsideVol20[i],
+                    pctFromLow[i],
+                    newHigh60[i],
+                    newHigh120[i]));
         }
         return rows;
     }

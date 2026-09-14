@@ -22,6 +22,15 @@
             <arg column="return_60" javaType="java.lang.Double"/>
             <arg column="volatility_20" javaType="java.lang.Double"/>
             <arg column="pct_from_52w_high" javaType="java.lang.Double"/>
+            <arg column="volume_ratio_5" javaType="java.lang.Double"/>
+            <arg column="volume_ratio_20" javaType="java.lang.Double"/>
+            <arg column="vol_chg_20" javaType="java.lang.Double"/>
+            <arg column="atr_20" javaType="java.lang.Double"/>
+            <arg column="amplitude_20" javaType="java.lang.Double"/>
+            <arg column="downside_vol_20" javaType="java.lang.Double"/>
+            <arg column="pct_from_52w_low" javaType="java.lang.Double"/>
+            <arg column="new_high_60" javaType="java.lang.Double"/>
+            <arg column="new_high_120" javaType="java.lang.Double"/>
         </constructor>
     </resultMap>
 
@@ -31,6 +40,9 @@
                                   macd_dif, macd_dea, macd_hist,
                                   rsi6, rsi12, rsi24,
                                   return_20, return_60, volatility_20, pct_from_52w_high,
+                                  volume_ratio_5, volume_ratio_20, vol_chg_20,
+                                  atr_20, amplitude_20, downside_vol_20,
+                                  pct_from_52w_low, new_high_60, new_high_120,
                                   data_status, created_at, updated_at)
         VALUES
         <foreach collection="list" item="it" separator=",">
@@ -39,6 +51,9 @@
             #{it.macdDif}, #{it.macdDea}, #{it.macdHist},
             #{it.rsi6}, #{it.rsi12}, #{it.rsi24},
             #{it.return20}, #{it.return60}, #{it.volatility20}, #{it.pctFrom52wHigh},
+            #{it.volumeRatio5}, #{it.volumeRatio20}, #{it.volChg20},
+            #{it.atr20}, #{it.amplitude20}, #{it.downsideVol20},
+            #{it.pctFrom52wLow}, #{it.newHigh60}, #{it.newHigh120},
             'ACCEPTED',
             strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'),
             strftime('%Y-%m-%dT%H:%M:%f', 'now', 'localtime'))
@@ -58,6 +73,15 @@
         return_60         = excluded.return_60,
         volatility_20     = excluded.volatility_20,
         pct_from_52w_high = excluded.pct_from_52w_high,
+        volume_ratio_5    = excluded.volume_ratio_5,
+        volume_ratio_20   = excluded.volume_ratio_20,
+        vol_chg_20        = excluded.vol_chg_20,
+        atr_20            = excluded.atr_20,
+        amplitude_20      = excluded.amplitude_20,
+        downside_vol_20   = excluded.downside_vol_20,
+        pct_from_52w_low  = excluded.pct_from_52w_low,
+        new_high_60       = excluded.new_high_60,
+        new_high_120      = excluded.new_high_120,
         data_status       = excluded.data_status,
         updated_at        = excluded.updated_at
     </insert>
@@ -65,7 +89,10 @@
     <sql id="columns">
         instrument_id, trade_date, ma5, ma10, ma20, ma60,
         macd_dif, macd_dea, macd_hist, rsi6, rsi12, rsi24,
-        return_20, return_60, volatility_20, pct_from_52w_high
+        return_20, return_60, volatility_20, pct_from_52w_high,
+        volume_ratio_5, volume_ratio_20, vol_chg_20,
+        atr_20, amplitude_20, downside_vol_20,
+        pct_from_52w_low, new_high_60, new_high_120
     </sql>
 
     <select id="count" resultType="long">

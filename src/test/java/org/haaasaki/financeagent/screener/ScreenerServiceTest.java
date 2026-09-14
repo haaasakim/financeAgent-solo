@@ -497,6 +497,7 @@ class ScreenerServiceTest {
                                double volatility20, double pctFrom52wHigh) {
         return new FactorDaily(id, TRADE_DATE, 10.0, 10.0, ma20, ma60,
                 0.0, 0.0, 0.0, 50.0, 50.0, 50.0,
-                return20, return60, volatility20, pctFrom52wHigh);
+                return20, return60, volatility20, pctFrom52wHigh,
+                null, null, null, null, null, null, null, null, null);
     }
 }

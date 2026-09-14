@@ -93,6 +93,6 @@ class FactorQueryServiceTest {
                 close, close, close, close,
                 close, close, 0.0,
                 50.0, 50.0, 50.0,
-                0.1, 0.2, 0.01, -0.05);
+                0.1, 0.2, 0.01, -0.05, null, null, null, null, null, null, null, null, null);
     }
 }

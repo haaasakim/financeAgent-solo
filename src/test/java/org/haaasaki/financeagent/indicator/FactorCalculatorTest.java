@@ -38,8 +38,45 @@ class FactorCalculatorTest {
         assertThat(last.return20()).isNull();
         assertThat(last.volatility20()).isNull();
         assertThat(last.pctFrom52wHigh()).isNull();
+        assertThat(last.volumeRatio5()).isNull();
+        assertThat(last.volumeRatio20()).isNull();
+        assertThat(last.volChg20()).isNull();
+        assertThat(last.atr20()).isNull();
+        assertThat(last.amplitude20()).isNull();
+        assertThat(last.downsideVol20()).isNull();
+        assertThat(last.pctFrom52wLow()).isNull();
+        assertThat(last.newHigh60()).isNull();
+        assertThat(last.newHigh120()).isNull();
         assertThat(last.macdDif()).isNotNull();
         assertThat(last.macdHist()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("v2 量价与位置因子：量比 / ATR / 振幅 / 新高窗口，负收益缺失时下行波动为 null")
+    void computesVolumeAndPositionColumns() {
+        List<DailyBar> bars = new ArrayList<>();
+        LocalDate date = LocalDate.of(2024, 1, 1);
+        double prevClose = 10.0;
+        for (int i = 0; i < 60; i++) {
+            double close = i == 59 ? 11.0 : 10.0;
+            bars.add(bar(date, close, close + 0.5, close - 0.5,
+                    i == 0 ? null : prevClose, i + 1));
+            prevClose = close;
+            date = date.plusDays(1);
+        }
+
+        FactorDaily last = FactorCalculator.calculate(bars).get(59);
+
+        assertThat(last.volumeRatio5()).isCloseTo(60.0 / 57.0, within(1e-12));
+        assertThat(last.volumeRatio20()).isNotNull();
+        assertThat(last.volChg20()).isNotNull();
+        // TR：19 根 1.0 + 末根跳空 1.5 → ATR = 1.025，除以收盘 11
+        assertThat(last.atr20()).isCloseTo(1.025 / 11.0, within(1e-12));
+        assertThat(last.amplitude20()).isCloseTo(0.1, within(1e-12));
+        assertThat(last.downsideVol20()).isNull();
+        assertThat(last.newHigh60()).isCloseTo(1.0, within(1e-12));
+        assertThat(last.newHigh120()).isNull();
+        assertThat(last.pctFrom52wLow()).isNull();
     }
 
     @Test
@@ -85,5 +122,11 @@ class FactorCalculatorTest {
     private DailyBar bar(LocalDate date, double close) {
         return new DailyBar(ID, date, close, close, close, close,
                 null, 1_000L, null, null, null, DailyBar.ADJ_QFQ, "TEST");
+    }
+
+    private DailyBar bar(LocalDate date, double close, double high, double low,
+                         Double preClose, long volume) {
+        return new DailyBar(ID, date, close, high, low, close,
+                preClose, volume, null, null, null, DailyBar.ADJ_QFQ, "TEST");
     }
 }
