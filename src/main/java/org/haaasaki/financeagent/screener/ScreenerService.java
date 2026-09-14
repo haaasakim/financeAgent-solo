@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +23,7 @@ import org.haaasaki.financeagent.data.model.Strategy;
 import org.haaasaki.financeagent.screener.dsl.CompareOp;
 import org.haaasaki.financeagent.screener.dsl.Condition;
 import org.haaasaki.financeagent.screener.dsl.DslValidator;
+import org.haaasaki.financeagent.screener.dsl.ScoreDirection;
 import org.haaasaki.financeagent.screener.dsl.ScreenerDsl;
 import org.haaasaki.financeagent.screener.factor.FactorDefinition;
 import org.haaasaki.financeagent.screener.factor.FactorKind;
@@ -155,17 +157,28 @@ public class ScreenerService {
         return scored;
     }
 
-    /** 参与评分的条件：all / any 组中的数值因子 + 方向明确（gt/gte/lt/lte）的条件。 */
+    /**
+     * 参与评分的条件（WI-011）：
+     * 显式模式（任一条件携带 {@code score} 字段）下只取 {@code score=true} 的数值条件；
+     * 兼容模式（旧策略 JSON）沿用 WI-005 口径：数值 + 方向明确的运算符自动参与、权重 1。
+     */
     private List<ScoringCondition> scoringConditions(ScreenerDsl dsl, boolean backtest) {
+        boolean explicit = isExplicitScoring(dsl);
         List<ScoringCondition> result = new ArrayList<>();
-        addScoringConditions(result, dsl.all(), false, backtest);
-        addScoringConditions(result, dsl.any(), true, backtest);
+        addScoringConditions(result, dsl.all(), false, backtest, explicit);
+        addScoringConditions(result, dsl.any(), true, backtest, explicit);
         return result;
+    }
+
+    private boolean isExplicitScoring(ScreenerDsl dsl) {
+        return Stream.of(dsl.all(), dsl.any(), dsl.not())
+                .flatMap(List::stream)
+                .anyMatch(condition -> condition.score() != null);
     }
 
     private void addScoringConditions(List<ScoringCondition> target,
                                       List<Condition> conditions, boolean anyGroup,
-                                      boolean backtest) {
+                                      boolean backtest, boolean explicit) {
         for (Condition condition : conditions) {
             FactorDefinition definition = factorRegistry.find(condition.factor());
             if (definition.kind() != FactorKind.NUMBER
@@ -173,18 +186,33 @@ public class ScreenerService {
                 continue;
             }
             boolean higherBetter;
-            switch (condition.op()) {
-                case GT, GTE -> higherBetter = true;
-                case LT, LTE -> higherBetter = false;
-                default -> {
+            if (explicit) {
+                if (!Boolean.TRUE.equals(condition.score())) {
                     continue;
+                }
+                ScoreDirection direction = condition.direction() != null
+                        ? condition.direction() : ScoreDirection.defaultFor(condition.op());
+                if (direction == null) {
+                    // eq 未指定方向已由校验拒绝；此处防御性跳过
+                    continue;
+                }
+                higherBetter = direction == ScoreDirection.HIGHER;
+            } else {
+                switch (condition.op()) {
+                    case GT, GTE -> higherBetter = true;
+                    case LT, LTE -> higherBetter = false;
+                    default -> {
+                        continue;
+                    }
                 }
             }
             String expression = backtest
                     ? definition.backtestExpression()
                     : definition.expression();
+            double weight = explicit && condition.weight() != null
+                    ? condition.weight() : 1.0;
             target.add(new ScoringCondition(definition.key(), expression,
-                    condition.op(), condition.value(), higherBetter, anyGroup));
+                    condition.op(), condition.value(), higherBetter, weight, anyGroup));
         }
     }
 
@@ -222,7 +250,7 @@ public class ScreenerService {
         List<ScreenerRow> scored = new ArrayList<>(matched.size());
         for (ScreenerRow row : matched) {
             double sum = 0;
-            int count = 0;
+            double weightSum = 0;
             for (ScoringCondition condition : conditions) {
                 Double value = valuesByFactor.get(condition.factor()).get(row.instrumentId());
                 if (value == null) {
@@ -231,13 +259,13 @@ public class ScreenerService {
                 if (condition.anyGroup() && !satisfies(condition, value)) {
                     continue;
                 }
-                sum += percentile(distributions.get(condition.factor()), value,
+                sum += condition.weight() * percentile(distributions.get(condition.factor()), value,
                         condition.higherBetter());
-                count++;
+                weightSum += condition.weight();
             }
             // 保留 1 位小数（与页面展示一致）：避免同分因浮点末位差被拆开
-            scored.add(row.withScore(count == 0 ? null
-                    : Math.round(sum / count * 1000.0) / 10.0));
+            scored.add(row.withScore(weightSum == 0 ? null
+                    : Math.round(sum / weightSum * 1000.0) / 10.0));
         }
         return scored;
     }
@@ -323,6 +351,7 @@ public class ScreenerService {
      * 评分条件（服务端解析，表达式只来自注册表白名单）。
      *
      * @param anyGroup true 表示仅在该行满足条件时参与评分（any 组语义）
+     * @param weight   评分权重（1 = 等权；WI-011 显式模式可自定义）
      */
     private record ScoringCondition(
             String factor,
@@ -330,6 +359,7 @@ public class ScreenerService {
             CompareOp op,
             double threshold,
             boolean higherBetter,
+            double weight,
             boolean anyGroup) {
     }
 }

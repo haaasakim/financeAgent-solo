@@ -20,6 +20,7 @@ import org.haaasaki.financeagent.data.model.ScreenerRow;
 import org.haaasaki.financeagent.data.model.Strategy;
 import org.haaasaki.financeagent.screener.dsl.CompareOp;
 import org.haaasaki.financeagent.screener.dsl.Condition;
+import org.haaasaki.financeagent.screener.dsl.ScoreDirection;
 import org.haaasaki.financeagent.screener.dsl.ScreenerDsl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -364,8 +365,103 @@ class ScreenerServiceTest {
         assertThat(result.rows()).isEmpty();
     }
 
+    @Test
+    @DisplayName("WI-011 显式评分：权重 3:1 加权，排序与等权旧口径不同")
+    void explicitScoringAppliesWeights() {
+        ScreenerResult result = screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, true, 3.0, ScoreDirection.HIGHER),
+                cs("volatility20", CompareOp.LTE, 6, true, 1.0, ScoreDirection.LOWER)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "002594.SZ", "300750.SZ", "000001.SZ", "510300.SH", "688981.SH");
+        assertThat(scores(result)).containsExactly(75.0, 62.5, 50.0, 43.8, 18.8);
+    }
+
+    @Test
+    @DisplayName("WI-011 显式评分：score=false 的条件只过滤，不参与排序")
+    void explicitScoringFilterOnly() {
+        ScreenerResult result = screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, true, null, null),
+                cs("volatility20", CompareOp.LTE, 6, false, null, null)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "002594.SZ", "300750.SZ", "000001.SZ", "510300.SH", "688981.SH");
+        assertThat(scores(result)).containsExactly(100.0, 75.0, 50.0, 25.0, 0.0);
+    }
+
+    @Test
+    @DisplayName("WI-011 显式评分：方向可覆盖运算符推断（lt 也可越大越好）")
+    void explicitScoringOverridesDirection() {
+        ScreenerResult result = screenerService.screen(all(
+                cs("return20", CompareOp.LT, 20, true, null, ScoreDirection.HIGHER)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "000001.SZ", "510300.SH", "688981.SH", "600000.SH");
+        assertThat(scores(result)).containsExactly(100.0, 66.7, 33.3, 0.0);
+    }
+
+    @Test
+    @DisplayName("WI-011 显式评分：eq 条件必须显式方向，给方向后可正常评分")
+    void explicitScoringEqRequiresDirection() {
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("volatility20", CompareOp.EQ, 2, true, null, null)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("等值条件参与评分需指定方向");
+
+        ScreenerResult result = screenerService.screen(all(
+                cs("volatility20", CompareOp.EQ, 2, true, null, ScoreDirection.LOWER)), 1);
+        assertThat(ids(result)).containsExactly("000001.SZ");
+        assertThat(scores(result)).containsExactly(100.0);
+    }
+
+    @Test
+    @DisplayName("WI-011 校验：布尔/排除组不可评分；权重范围；权重方向须随评分出现")
+    void validationRejectsInvalidScoring() {
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("aboveMa60", CompareOp.EQ, 1, true, null, null)), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("不支持参与评分");
+        assertThatThrownBy(() -> screenerService.screen(new ScreenerDsl(List.of(), List.of(),
+                List.of(cs("return20", CompareOp.GT, 0, true, null, null))), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("排除组条件不支持参与评分");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, true, 0.05, null)), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("权重必须在");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, true, 11.0, null)), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("权重必须在");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, false, 2.0, null)), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("只有参与评分");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, false, null, ScoreDirection.LOWER)), 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("只有参与评分");
+    }
+
+    @Test
+    @DisplayName("WI-011 解析：显式评分字段 JSON 往返一致；非法方向按格式错误拒绝")
+    void parseExplicitScoringAndRejectsUnknownDirection() {
+        ScreenerDsl dsl = all(cs("return20", CompareOp.GT, 0, true, 2.0, ScoreDirection.HIGHER));
+        assertThat(screenerService.parse(screenerService.toJson(dsl))).isEqualTo(dsl);
+
+        ScreenerDsl legacy = all(c("return20", CompareOp.GT, 0));
+        String legacyJson = screenerService.toJson(legacy);
+        assertThat(legacyJson)
+                .doesNotContain("score").doesNotContain("weight").doesNotContain("direction");
+        assertThat(screenerService.parse(legacyJson)).isEqualTo(legacy);
+
+        assertThatThrownBy(() -> screenerService.parse(
+                "{\"all\":[{\"factor\":\"return20\",\"op\":\"gt\",\"value\":0,"
+                        + "\"score\":true,\"direction\":\"up\"}],\"any\":[],\"not\":[]}"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("条件树格式错误");
+    }
+
     private Condition c(String factor, CompareOp op, double value) {
         return new Condition(factor, op, value);
+    }
+
+    private Condition cs(String factor, CompareOp op, double value, boolean score,
+                         Double weight, ScoreDirection direction) {
+        return new Condition(factor, op, value, score, weight, direction);
     }
 
     private ScreenerDsl all(Condition... conditions) {

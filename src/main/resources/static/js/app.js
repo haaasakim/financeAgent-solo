@@ -331,6 +331,8 @@
   - factors：服务端下发的可用因子（key/label/kind/unit）
   - initial：初始条件树 {all, any, not}
   布尔因子固定 eq，值 1=是 / 0=否；数值因子由用户选择运算符与阈值。
+  评分字段（WI-011）：数值条件可勾选「评分」并设置方向与权重；
+  旧策略（无 score 字段）按原口径预置勾选状态，保存后行为不变。
 */
 function screenerApp(factors, initial) {
   'use strict';
@@ -342,37 +344,68 @@ function screenerApp(factors, initial) {
   });
   var start = initial || {};
 
-  function hydrate(list) {
+  function kindOf(key) {
+    return (factorMap[key] || {}).kind || 'NUMBER';
+  }
+
+  /* eq 无自然方向，界面默认「越大越好」，由用户自行调整 */
+  function defaultDirection(op) {
+    return (op === 'lt' || op === 'lte') ? 'lower' : 'higher';
+  }
+
+  /* 兼容模式（无 score 字段）：数值 + 方向明确的运算符默认参与评分（WI-005 口径） */
+  function legacyScored(op) {
+    return op !== 'eq';
+  }
+
+  function hydrate(list, scorable) {
     return (list || []).map(function (c) {
-      var kind = (factorMap[c.factor] || {}).kind || 'NUMBER';
-      return {
+      var kind = kindOf(c.factor);
+      var condition = {
         factor: c.factor,
         op: kind === 'BOOLEAN' ? 'eq' : (c.op || 'gte'),
         value: c.value == null ? (kind === 'BOOLEAN' ? 1 : 0) : c.value
       };
+      if (kind !== 'BOOLEAN' && scorable) {
+        condition.score = c.score == null ? legacyScored(condition.op) : !!c.score;
+        condition.weight = c.weight == null ? 1 : c.weight;
+        condition.direction = c.direction || defaultDirection(condition.op);
+      }
+      return condition;
     });
   }
 
-  function compile(list) {
+  function compile(list, scorable) {
     return list.map(function (c) {
-      var kind = (factorMap[c.factor] || {}).kind || 'NUMBER';
-      return {
+      var kind = kindOf(c.factor);
+      var condition = {
         factor: c.factor,
         op: kind === 'BOOLEAN' ? 'eq' : c.op,
         value: Number(c.value)
       };
+      if (kind !== 'BOOLEAN' && scorable) {
+        condition.score = !!c.score;
+        if (c.score) {
+          condition.direction = c.direction || defaultDirection(condition.op);
+          condition.weight = Number(c.weight) > 0 ? Number(c.weight) : 1;
+        }
+      }
+      return condition;
     });
   }
 
   return {
     sections: [
-      { key: 'ALL', tag: 'tag-all', title: '全部满足', note: '所有条件同时成立', conditions: hydrate(start.all) },
-      { key: 'ANY', tag: 'tag-any', title: '任一满足', note: '至少一个条件成立', conditions: hydrate(start.any) },
-      { key: 'NOT', tag: 'tag-not', title: '排除', note: '排除同时满足以下全部条件的标的', conditions: hydrate(start.not) }
+      { key: 'ALL', tag: 'tag-all', title: '全部满足', note: '所有条件同时成立', scorable: true,
+        conditions: hydrate(start.all, true) },
+      { key: 'ANY', tag: 'tag-any', title: '任一满足', note: '至少一个条件成立', scorable: true,
+        conditions: hydrate(start.any, true) },
+      { key: 'NOT', tag: 'tag-not', title: '排除', note: '排除同时满足以下全部条件的标的', scorable: false,
+        conditions: hydrate(start.not, false) }
     ],
 
     kindOf: function (key) {
-      return (factorMap[key] || {}).kind || 'NUMBER';
+      return kindOf(key);
     },
     unitOf: function (key) {
       return (factorMap[key] || {}).unit || '';
@@ -382,23 +415,42 @@ function screenerApp(factors, initial) {
         return;
       }
       var kind = this.kindOf(key);
-      this.sections[0].conditions.push({
+      var condition = {
         factor: key,
         op: kind === 'BOOLEAN' ? 'eq' : 'gte',
         value: kind === 'BOOLEAN' ? 1 : 0
-      });
+      };
+      if (kind !== 'BOOLEAN') {
+        condition.score = true;
+        condition.weight = 1;
+        condition.direction = defaultDirection(condition.op);
+      }
+      this.sections[0].conditions.push(condition);
     },
     onFactorChange: function (section, index) {
       var condition = section.conditions[index];
       var kind = this.kindOf(condition.factor);
       condition.op = kind === 'BOOLEAN' ? 'eq' : 'gte';
       condition.value = kind === 'BOOLEAN' ? 1 : 0;
+      if (kind === 'BOOLEAN') {
+        delete condition.score;
+        delete condition.weight;
+        delete condition.direction;
+      } else if (section.scorable) {
+        condition.score = true;
+        condition.weight = 1;
+        condition.direction = defaultDirection(condition.op);
+      }
+    },
+    /* 运算符变化时方向跟随其默认值；用户可再单独调整 */
+    onOpChange: function (condition) {
+      condition.direction = defaultDirection(condition.op);
     },
     dslJson: function () {
       return JSON.stringify({
-        all: compile(this.sections[0].conditions),
-        any: compile(this.sections[1].conditions),
-        not: compile(this.sections[2].conditions)
+        all: compile(this.sections[0].conditions, true),
+        any: compile(this.sections[1].conditions, true),
+        not: compile(this.sections[2].conditions, false)
       });
     }
   };

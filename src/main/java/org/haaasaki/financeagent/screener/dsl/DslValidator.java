@@ -15,6 +15,9 @@ public final class DslValidator {
     static final int MAX_PER_GROUP = 20;
     static final int MAX_TOTAL = 50;
     static final double MAX_ABS_VALUE = 1_000_000;
+    /** 评分权重范围（WI-011）。 */
+    static final double MIN_SCORE_WEIGHT = 0.1;
+    static final double MAX_SCORE_WEIGHT = 10.0;
 
     private DslValidator() {
     }
@@ -27,9 +30,9 @@ public final class DslValidator {
         if (total > MAX_TOTAL) {
             throw new BusinessException("条件总数不能超过 " + MAX_TOTAL + " 个");
         }
-        validateGroup("全部满足", dsl.all(), registry);
-        validateGroup("任一满足", dsl.any(), registry);
-        validateGroup("排除", dsl.not(), registry);
+        validateGroup("全部满足", dsl.all(), registry, true);
+        validateGroup("任一满足", dsl.any(), registry, true);
+        validateGroup("排除", dsl.not(), registry, false);
     }
 
     /**
@@ -56,17 +59,17 @@ public final class DslValidator {
     }
 
     private static void validateGroup(String groupLabel, java.util.List<Condition> conditions,
-                                      FactorRegistry registry) {
+                                      FactorRegistry registry, boolean allowScoring) {
         if (conditions.size() > MAX_PER_GROUP) {
             throw new BusinessException(groupLabel + "的条件不能超过 " + MAX_PER_GROUP + " 个");
         }
         for (Condition condition : conditions) {
-            validateCondition(groupLabel, condition, registry);
+            validateCondition(groupLabel, condition, registry, allowScoring);
         }
     }
 
     private static void validateCondition(String groupLabel, Condition condition,
-                                          FactorRegistry registry) {
+                                          FactorRegistry registry, boolean allowScoring) {
         FactorDefinition definition = registry.find(condition.factor());
         if (definition == null) {
             throw new BusinessException(groupLabel + "存在未知因子：" + condition.factor());
@@ -90,6 +93,36 @@ public final class DslValidator {
             }
         } else if (Math.abs(condition.value()) > MAX_ABS_VALUE) {
             throw new BusinessException("因子「" + definition.label() + "」阈值超出允许范围");
+        }
+
+        validateScoring(condition, definition, allowScoring);
+    }
+
+    /** 评分字段校验（WI-011）：布尔条件与排除组不允许参与评分；权重与方向仅随 score=true 出现。 */
+    private static void validateScoring(Condition condition, FactorDefinition definition,
+                                        boolean allowScoring) {
+        String label = definition.label();
+        if (!Boolean.TRUE.equals(condition.score())) {
+            if (condition.weight() != null || condition.direction() != null) {
+                throw new BusinessException("因子「" + label + "」只有参与评分的条件才能设置权重/方向");
+            }
+            return;
+        }
+        if (!allowScoring) {
+            throw new BusinessException("排除组条件不支持参与评分：" + label);
+        }
+        if (definition.kind() != FactorKind.NUMBER) {
+            throw new BusinessException("因子「" + label + "」不支持参与评分（仅数值因子）");
+        }
+        if (condition.weight() != null
+                && (!Double.isFinite(condition.weight())
+                || condition.weight() < MIN_SCORE_WEIGHT
+                || condition.weight() > MAX_SCORE_WEIGHT)) {
+            throw new BusinessException("因子「" + label + "」的评分权重必须在 "
+                    + MIN_SCORE_WEIGHT + " ~ " + MAX_SCORE_WEIGHT + " 之间");
+        }
+        if (condition.op() == CompareOp.EQ && condition.direction() == null) {
+            throw new BusinessException("因子「" + label + "」等值条件参与评分需指定方向");
         }
     }
 }

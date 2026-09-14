@@ -186,6 +186,26 @@ class ScreenerControllerTest {
     }
 
     @Test
+    @DisplayName("WI-011：显式评分条件可提交（score=false 只过滤）；非法评分字段返回错误摘要")
+    void resultsFragmentSupportsExplicitScoring() throws Exception {
+        String dsl = "{\"all\":[{\"factor\":\"return20\",\"op\":\"gt\",\"value\":0,"
+                + "\"score\":true,\"weight\":2,\"direction\":\"higher\"},"
+                + "{\"factor\":\"volatility20\",\"op\":\"lte\",\"value\":10,\"score\":false}],"
+                + "\"any\":[],\"not\":[]}";
+        mockMvc.perform(post("/fragments/screener/results").param("dsl", dsl))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("平安银行")))
+                .andExpect(content().string(containsString("100.0")))
+                .andExpect(content().string(not(containsString("浦发银行"))));
+
+        mockMvc.perform(post("/fragments/screener/results")
+                        .param("dsl", "{\"all\":[{\"factor\":\"aboveMa60\",\"op\":\"eq\",\"value\":1,"
+                                + "\"score\":true}],\"any\":[],\"not\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("不支持参与评分")));
+    }
+
+    @Test
     @DisplayName("策略片段：保存成功刷新列表，重名覆盖，名称校验")
     void strategyFragmentSavesAndLists() throws Exception {
         mockMvc.perform(post("/fragments/screener/strategies")
