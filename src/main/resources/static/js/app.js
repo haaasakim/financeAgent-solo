@@ -395,6 +395,9 @@ function screenerApp(factors, initial) {
   }
 
   return {
+    /* 因子目录当前分组标签页（WI-012 后目录变长，改为分组切换） */
+    factorTab: '基础',
+
     sections: [
       { key: 'ALL', tag: 'tag-all', title: '全部满足', note: '所有条件同时成立', scorable: true,
         conditions: hydrate(start.all, true) },

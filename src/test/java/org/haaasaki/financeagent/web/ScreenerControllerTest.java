@@ -96,6 +96,11 @@ class ScreenerControllerTest {
                 .andExpect(content().string(containsString("超跌企稳")))
                 .andExpect(content().string(containsString("待财报数据源，暂不可用")))
                 .andExpect(content().string(containsString("尚未保存策略")))
+                // 因子目录改为分组标签页（因子变多后控制左栏高度）
+                .andExpect(content().string(containsString("class=\"factor-tab\"")))
+                .andExpect(content().string(containsString("data-group=\"量能\"")))
+                .andExpect(content().string(containsString("data-group=\"风险\"")))
+                .andExpect(content().string(containsString("x-cloak")))
                 // 未加载已保存策略时「拿去回测」置灰，并提示先保存
                 .andExpect(content().string(containsString("先保存为策略后再回测")))
                 // 条件行下拉选项必须服务端渲染，否则 Alpine x-model 会因选项未就绪选中首项

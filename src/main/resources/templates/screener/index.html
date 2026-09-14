@@ -22,8 +22,18 @@
                     <div class="card-title">因子目录</div>
                 </div>
                 <div class="card-sub" style="margin-bottom:10px">点击因子加入「全部满足」</div>
-                <div class="factor-group" th:each="group : ${factorGroups}">
-                    <h4 th:text="${group.name}">基础</h4>
+                <div class="factor-tabs">
+                    <button type="button" class="factor-tab" th:each="group : ${factorGroups}"
+                            th:attr="data-group=${group.name}"
+                            :class="{ active: factorTab === $el.dataset.group }"
+                            @click="factorTab = $el.dataset.group">
+                        <span th:text="${group.name}">基础</span>
+                        <span class="count" th:text="${group.availableCount()}">0</span>
+                    </button>
+                </div>
+                <div class="factor-group" th:each="group : ${factorGroups}"
+                     th:attr="data-group=${group.name}"
+                     x-show="factorTab === $el.dataset.group" x-cloak>
                     <div class="factor">
                         <span th:each="f : ${group.factors}" th:if="${f.available}"
                               th:text="${f.label}"

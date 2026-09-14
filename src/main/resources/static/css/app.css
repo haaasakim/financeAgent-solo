@@ -185,13 +185,28 @@ th .arrow { color: var(--text-3); font-size: 10px; }
 
 .grid-2 { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
 
-.factor-group { margin-bottom: 14px; }
-.factor-group h4 { font-size: 12px; font-weight: 500; color: var(--text-3); margin-bottom: 6px; letter-spacing: .3px; }
-.factor { margin-left: 8px; }
+.factor-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
+.factor-tab {
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: .15s;
+}
+.factor-tab:hover { border-color: var(--primary); color: var(--primary); }
+.factor-tab.active { background: var(--primary-l); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+.factor-tab .count { color: var(--text-3); margin-left: 2px; }
+.factor-tab.active .count { color: var(--primary); }
+.factor-group { margin-bottom: 4px; }
+.factor { display: flex; flex-wrap: wrap; gap: 5px; }
 .factor span {
-  display: block;
-  padding: 5px 8px;
-  border-radius: 5px;
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #F5F5F2;
   color: var(--text-2);
   cursor: pointer;
   font-size: 12px;
@@ -199,7 +214,8 @@ th .arrow { color: var(--text-3); font-size: 10px; }
 }
 .factor span:hover { background: var(--primary-l); color: var(--primary); }
 .factor span.disabled { color: var(--text-3); cursor: not-allowed; }
-.factor span.disabled:hover { background: transparent; color: var(--text-3); }
+.factor span.disabled:hover { background: #F5F5F2; color: var(--text-3); }
+[x-cloak] { display: none !important; }
 
 .tpl { display: block; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: .15s; text-decoration: none; color: inherit; }
 .tpl:hover { border-color: var(--primary); background: #FBFDFF; }

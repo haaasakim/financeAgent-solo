@@ -9,4 +9,9 @@ import java.util.List;
  * @param factors 组内因子，按注册顺序
  */
 public record FactorGroup(String name, List<FactorDefinition> factors) {
+
+    /** 组内可用（有数据源）因子数，用于目录标签页计数。 */
+    public int availableCount() {
+        return (int) factors.stream().filter(FactorDefinition::available).count();
+    }
 }
