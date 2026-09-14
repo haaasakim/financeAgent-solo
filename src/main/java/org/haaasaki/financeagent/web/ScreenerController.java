@@ -102,6 +102,7 @@ public class ScreenerController {
     public String saveStrategy(@RequestParam String name,
                                @RequestParam(required = false) String description,
                                @RequestParam String dsl,
+                               @RequestParam(required = false) Long selectedStrategyId,
                                Model model) {
         try {
             screenerService.saveStrategy(name, description, dsl);
@@ -111,14 +112,18 @@ public class ScreenerController {
             model.addAttribute("errorMessage", e.getMessage());
         }
         model.addAttribute("strategies", screenerService.listStrategies());
+        model.addAttribute("selectedStrategyId", selectedStrategyId);
         return "fragments/screener-strategies";
     }
 
     @PostMapping("/fragments/screener/strategies/{id}/delete")
-    public String deleteStrategy(@PathVariable long id, Model model) {
+    public String deleteStrategy(@PathVariable long id,
+                                 @RequestParam(required = false) Long selectedStrategyId,
+                                 Model model) {
         screenerService.deleteStrategy(id);
         model.addAttribute("notice", "已删除策略");
         model.addAttribute("strategies", screenerService.listStrategies());
+        model.addAttribute("selectedStrategyId", selectedStrategyId);
         return "fragments/screener-strategies";
     }
 

@@ -1,20 +1,28 @@
 <!--
   已保存策略列表片段：由保存 / 删除策略的 POST 返回，outerHTML 替换 #strategy-list。
 -->
-<div id="strategy-list" th:fragment="list" xmlns:th="http://www.thymeleaf.org">
+<div id="strategy-list" class="strategy-list" th:fragment="list" xmlns:th="http://www.thymeleaf.org">
     <div class="notice" th:if="${notice != null}" th:text="${notice}">已保存</div>
     <div class="notice" th:if="${errorMessage != null}" th:text="${errorMessage}">保存失败</div>
     <div class="empty" th:if="${#lists.isEmpty(strategies)}">尚未保存策略</div>
 
-    <div class="tpl" th:each="s : ${strategies}">
-        <div class="tpl-row">
-            <a class="tpl-name" th:href="@{/screener(strategyId=${s.id})}"
-               th:text="${s.name}">我的策略</a>
-            <button class="btn btn-sm"
-                    th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})}"
-                    hx-target="#strategy-list" hx-swap="outerHTML">删除</button>
+    <div class="strategy-list-scroll" th:if="${!#lists.isEmpty(strategies)}">
+        <div class="strategy-item"
+             th:each="s : ${strategies}"
+             th:classappend="${selectedStrategyId != null and selectedStrategyId == s.id} ? ' selected' : ''">
+            <div class="strategy-item-main">
+                <a class="strategy-item-name" th:href="@{/screener(strategyId=${s.id})}"
+                   th:text="${s.name}" title="加载策略">我的策略</a>
+                <div class="strategy-item-desc"
+                     th:if="${s.description != null and !s.description.isBlank()}"
+                     th:text="${s.description}"></div>
+            </div>
+            <div class="strategy-item-actions">
+                <a class="btn btn-sm" th:href="@{/backtest(strategyId=${s.id})}">回测</a>
+                <button class="btn btn-sm btn-danger-quiet"
+                        th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})}"
+                        hx-target="#strategy-list" hx-swap="outerHTML">删除</button>
+            </div>
         </div>
-        <div class="tpl-desc" th:if="${s.description != null and !s.description.isBlank()}"
-             th:text="${s.description}"></div>
     </div>
 </div>

@@ -15,7 +15,7 @@
 
     <div class="grid-2">
 
-        <!-- 左栏：因子目录 / 预设模板 / 已保存策略 -->
+        <!-- 左栏：因子目录 / 预设模板 -->
         <aside>
             <div class="card" style="margin-bottom:16px">
                 <div class="card-hd">
@@ -48,16 +48,24 @@
                 </a>
             </div>
 
-            <div class="card">
+        </aside>
+
+        <!-- 右栏：我的策略 / 条件卡片 / 执行 / 结果 -->
+        <div>
+            <div class="card strategy-workspace" style="margin-bottom:16px">
                 <div class="card-hd">
-                    <div class="card-title">已保存策略</div>
+                    <div>
+                        <div class="card-title">我的策略</div>
+                        <div class="card-sub">点击策略名称加载；可直接回测或删除</div>
+                    </div>
+                    <div class="strategy-header-actions">
+                        <span class="card-sub" th:text="|共 ${#lists.size(strategies)} 个|">共 0 个</span>
+                        <a class="btn btn-sm" href="/screener">新建策略</a>
+                    </div>
                 </div>
                 <div th:replace="~{fragments/screener-strategies :: list}"></div>
             </div>
-        </aside>
 
-        <!-- 右栏：条件卡片 / 执行 / 结果 -->
-        <div>
             <div class="card" style="margin-bottom:16px">
                 <div class="card-hd">
                     <div class="card-title">筛选条件</div>
@@ -152,6 +160,7 @@
                           hx-target="#strategy-list" hx-swap="outerHTML"
                           hx-indicator="#strategy-loading">
                         <input type="hidden" name="dsl" :value="dslJson()">
+                        <input type="hidden" name="selectedStrategyId" th:value="${selectedStrategyId}">
                         <input type="text" name="name" placeholder="策略名" maxlength="50">
                         <button class="btn" type="submit">保存为策略</button>
                     </form>

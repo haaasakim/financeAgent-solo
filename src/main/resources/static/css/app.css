@@ -208,6 +208,54 @@ th .arrow { color: var(--text-3); font-size: 10px; }
 .tpl-name:hover { text-decoration: underline; }
 .tpl-desc { font-size: 11px; color: var(--text-3); line-height: 1.5; }
 
+.strategy-header-actions { display: flex; align-items: center; gap: 10px; }
+.strategy-list { min-width: 0; }
+.strategy-list-scroll { max-height: 280px; overflow-y: auto; padding-right: 4px; }
+.strategy-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--card);
+  transition: .15s;
+}
+.strategy-item:last-child { margin-bottom: 0; }
+.strategy-item:hover { border-color: var(--primary); background: #FBFDFF; }
+.strategy-item.selected {
+  border-color: var(--primary);
+  background: var(--primary-l);
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+.strategy-item-main { min-width: 0; }
+.strategy-item-name {
+  display: block;
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.strategy-item-name:hover { text-decoration: underline; }
+.strategy-item-desc {
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.strategy-item-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; }
+.strategy-item-actions .btn { white-space: nowrap; }
+.btn-danger-quiet { color: var(--text-3); }
+.btn-danger-quiet:hover { border-color: var(--up); color: var(--up); }
+
 .logic { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 12px; background: #FCFCFA; }
 .logic-hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .logic-tag { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; }
@@ -293,4 +341,8 @@ th .arrow { color: var(--text-3); font-size: 10px; }
   .kline-chart { height: 300px; }
   .form-grid { grid-template-columns: 1fr; }
   .metrics.cols-6 { grid-template-columns: repeat(2, 1fr); }
+  .strategy-header-actions { align-items: flex-end; flex-direction: column; gap: 6px; }
+  .strategy-item { flex-direction: column; }
+  .strategy-item-actions { width: 100%; }
+  .strategy-item-actions .btn { flex: 1; }
 }
