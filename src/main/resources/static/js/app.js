@@ -12,12 +12,14 @@
   document.addEventListener('DOMContentLoaded', function () {
     initKline();
     initBacktestCharts();
+    bindHistoryBack();
   });
 
   /* HTMX 换入回测结果后重新初始化图表（onLoad 对初始加载不触发，由 DOMContentLoaded 覆盖）。 */
   if (window.htmx) {
     htmx.onLoad(function () {
       initBacktestCharts();
+      bindHistoryBack();
     });
   }
 
@@ -36,6 +38,35 @@
       event.detail.isError = false;
     }
   });
+
+  /*
+    回测页由 HTMX 局部替换结果，不会为提交动作新增浏览器历史记录。
+    有同源来源页时优先返回来源页；直接打开页面或来源不可用时，保留
+    anchor 的 /screener 作为无 JS / 无历史记录的安全回退。
+  */
+  function bindHistoryBack() {
+    document.querySelectorAll('[data-history-back]').forEach(function (el) {
+      if (el.dataset.historyBackBound === 'true') {
+        return;
+      }
+      el.dataset.historyBackBound = 'true';
+      el.addEventListener('click', function (event) {
+        var sameOriginReferrer = false;
+        if (document.referrer) {
+          try {
+            sameOriginReferrer = new URL(document.referrer, window.location.href).origin
+              === window.location.origin;
+          } catch (ignored) {
+            sameOriginReferrer = false;
+          }
+        }
+        if (sameOriginReferrer && window.history.length > 1) {
+          event.preventDefault();
+          window.history.back();
+        }
+      });
+    });
+  }
 
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();

@@ -9,9 +9,12 @@
 
     <div class="card" style="margin-bottom:16px">
         <div class="card-hd">
-            <div class="card-title">回测参数</div>
-            <div class="card-sub" th:if="${defaultEnd != null}"
-                 th:text="|数据截至 ${defaultEnd} · 信号 T 日收盘，成交 T+1 开盘|">--</div>
+            <div>
+                <div class="card-title">回测参数</div>
+                <div class="card-sub" th:if="${defaultEnd != null}"
+                     th:text="|数据截至 ${defaultEnd} · 信号 T 日收盘，成交 T+1 开盘|">--</div>
+            </div>
+            <a class="btn btn-sm" href="/screener" data-history-back>返回上一页</a>
         </div>
 
         <form id="bt-form" hx-post="/fragments/backtest/run"
