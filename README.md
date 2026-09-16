@@ -44,6 +44,22 @@ java -jar target/financeAgent-*.jar --sync.incremental --sync.snapshot --spring.
 
 M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，用 `--sync.missing` 只补拉没有日K的标的（可重复执行直到缺失为 0）。因子任务可单独触发：`--factor.init` 全量回填，`--factor.update` 增量重算；历史估值同理：`--valuation.init` 回填、`--valuation.update` 增量。
 
+## 批量回测脚本
+
+`script/batch_backtest.py`：从创建/更新策略到批量回测、输出绩效与回撤结果的一体化脚本（Python 3 标准库，无需安装依赖；需应用已启动且与数据库同版本）。
+
+```bash
+# 全量跑脚本内置的策略矩阵（牛市 / 熊市 × 各策略建议频率）
+python3 script/batch_backtest.py
+
+# 常用参数
+python3 script/batch_backtest.py --only 缩量超跌 --windows BEAR --freqs DAILY
+python3 script/batch_backtest.py --report          # 仅输出已有结果
+python3 script/batch_backtest.py --create-only     # 只创建策略
+```
+
+结果输出到终端表格与 `target/batch-backtest/`（state.json 断点续跑，results.json / results.csv 明细；重复执行自动复用已成功的任务，`--force` 可强制重跑）。
+
 ## 项目结构
 
 ```
@@ -67,6 +83,8 @@ src/main/java/org/haaasaki/financeagent/
 src/main/resources/
   templates/  static/      页面与静态资源
   db/migration/            SQL 迁移脚本（V*.sql）
+script/
+  batch_backtest.py        批量回测：创建策略 → 回测 → 绩效/回撤报表
 ```
 
 ## 数据来源
