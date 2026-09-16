@@ -4,15 +4,17 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
 /**
- * 评分方向：数值越大得分越高 / 越小得分越高。
+ * 评分方向：数值越大得分越高 / 越小得分越高 / 区间最优（WI-014）。
  *
  * <p>仅当条件显式参与评分（{@code score=true}）时生效；未指定时由运算符推断
  * （{@code gt/gte→HIGHER}、{@code lt/lte→LOWER}、{@code eq} 无默认）。
+ * {@code BAND} 只能显式指定，且必须携带区间参数（校验见 {@code DslValidator}）。
  */
 public enum ScoreDirection {
 
     HIGHER("higher"),
-    LOWER("lower");
+    LOWER("lower"),
+    BAND("band");
 
     private final String key;
 

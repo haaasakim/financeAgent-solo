@@ -98,13 +98,14 @@ public final class DslValidator {
         validateScoring(condition, definition, allowScoring);
     }
 
-    /** 评分字段校验（WI-011）：布尔条件与排除组不允许参与评分；权重与方向仅随 score=true 出现。 */
+    /** 评分字段校验（WI-011 / WI-014）：布尔条件与排除组不允许参与评分；权重、方向与区间字段仅随 score=true 出现。 */
     private static void validateScoring(Condition condition, FactorDefinition definition,
                                         boolean allowScoring) {
         String label = definition.label();
         if (!Boolean.TRUE.equals(condition.score())) {
-            if (condition.weight() != null || condition.direction() != null) {
-                throw new BusinessException("因子「" + label + "」只有参与评分的条件才能设置权重/方向");
+            if (condition.weight() != null || condition.direction() != null
+                    || hasBandFields(condition)) {
+                throw new BusinessException("因子「" + label + "」只有参与评分的条件才能设置权重/方向/区间");
             }
             return;
         }
@@ -124,5 +125,40 @@ public final class DslValidator {
         if (condition.op() == CompareOp.EQ && condition.direction() == null) {
             throw new BusinessException("因子「" + label + "」等值条件参与评分需指定方向");
         }
+        validateBand(condition, label);
+    }
+
+    /** 区间评分参数校验（WI-014）。 */
+    private static void validateBand(Condition condition, String label) {
+        if (condition.direction() != ScoreDirection.BAND) {
+            if (hasBandFields(condition)) {
+                throw new BusinessException("因子「" + label + "」非区间评分不能设置区间参数");
+            }
+            return;
+        }
+        Double low = condition.bandLow();
+        Double high = condition.bandHigh();
+        Double toleranceLow = condition.bandLowTolerance();
+        Double toleranceHigh = condition.bandHighTolerance();
+        if (low == null || high == null || toleranceLow == null || toleranceHigh == null) {
+            throw new BusinessException("因子「" + label + "」区间评分需要下限、上限与两侧容差");
+        }
+        if (!Double.isFinite(low) || !Double.isFinite(high)
+                || Math.abs(low) > MAX_ABS_VALUE || Math.abs(high) > MAX_ABS_VALUE) {
+            throw new BusinessException("因子「" + label + "」区间参数超出允许范围");
+        }
+        if (low > high) {
+            throw new BusinessException("因子「" + label + "」区间下限不能大于上限");
+        }
+        if (!Double.isFinite(toleranceLow) || !Double.isFinite(toleranceHigh)
+                || toleranceLow <= 0 || toleranceHigh <= 0
+                || toleranceLow > MAX_ABS_VALUE || toleranceHigh > MAX_ABS_VALUE) {
+            throw new BusinessException("因子「" + label + "」区间容差必须大于 0");
+        }
+    }
+
+    private static boolean hasBandFields(Condition condition) {
+        return condition.bandLow() != null || condition.bandHigh() != null
+                || condition.bandLowTolerance() != null || condition.bandHighTolerance() != null;
     }
 }

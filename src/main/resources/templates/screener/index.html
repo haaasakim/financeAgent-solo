@@ -148,15 +148,35 @@
                                         <template x-if="cond.score">
                                             <span class="rule-inline">
                                                 <select class="rule-dir" x-model="cond.direction"
-                                                        aria-label="评分方向" title="评分方向">
+                                                        aria-label="评分方向" title="评分方向"
+                                                        @change="onDirectionChange(cond)">
                                                     <option value="higher">越大越好</option>
                                                     <option value="lower">越小越好</option>
+                                                    <option value="band">区间最优</option>
                                                 </select>
                                                 <input type="number" class="rule-weight"
                                                        min="0.1" max="10" step="0.5"
                                                        x-model.number="cond.weight"
                                                        aria-label="评分权重"
                                                        title="权重 0.1 ~ 10">
+                                            </span>
+                                        </template>
+
+                                        <!-- 区间最优（WI-014）：区间内满分，两侧按容差线性衰减 -->
+                                        <template x-if="cond.score && cond.direction === 'band'">
+                                            <span class="rule-inline rule-band">
+                                                <input type="number" step="any" x-model.number="cond.bandLow"
+                                                       aria-label="区间下限" title="目标区间下限">
+                                                <span class="unit">~</span>
+                                                <input type="number" step="any" x-model.number="cond.bandHigh"
+                                                       aria-label="区间上限" title="目标区间上限；与下限相同表示理想值">
+                                                <span class="unit">容差</span>
+                                                <input type="number" step="any" min="0.0001"
+                                                       x-model.number="cond.bandLowTolerance"
+                                                       aria-label="下侧容差" title="低于下限后每偏离该值，子分线性降到 0">
+                                                <input type="number" step="any" min="0.0001"
+                                                       x-model.number="cond.bandHighTolerance"
+                                                       aria-label="上侧容差" title="高于上限后每偏离该值，子分线性降到 0">
                                             </span>
                                         </template>
                                     </span>

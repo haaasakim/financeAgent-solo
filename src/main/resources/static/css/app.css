@@ -326,6 +326,9 @@ th .arrow { color: var(--text-3); font-size: 10px; }
 .rule-scoring.on .score-toggle { color: var(--primary); font-weight: 600; }
 .rule select.rule-dir { width: 84px; max-width: 84px; }
 .rule input.rule-weight { width: 52px; }
+.rule .rule-band { gap: 4px; }
+.rule .rule-band input { width: 64px; }
+.rule .rule-band .unit { font-size: 11px; }
 
 /* ---------- 回测模块 ---------- */
 

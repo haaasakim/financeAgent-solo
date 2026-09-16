@@ -358,6 +358,43 @@ function screenerApp(factors, initial) {
     return op !== 'eq';
   }
 
+  /* 区间评分（WI-014）：默认区间 = 当前阈值（理想值），容差 = 半倍阈值 */
+  function bandTolerance(value) {
+    var base = Math.abs(Number(value));
+    return base > 0 ? Math.round(base * 50) / 100 : 1;
+  }
+
+  function initBand(condition) {
+    if (condition.bandLow == null) {
+      condition.bandLow = Number(condition.value) || 0;
+    }
+    if (condition.bandHigh == null) {
+      condition.bandHigh = Number(condition.value) || 0;
+    }
+    if (condition.bandLowTolerance == null) {
+      condition.bandLowTolerance = bandTolerance(condition.value);
+    }
+    if (condition.bandHighTolerance == null) {
+      condition.bandHighTolerance = bandTolerance(condition.value);
+    }
+  }
+
+  function hydrateBand(condition, source) {
+    if (source.bandLow != null) {
+      condition.bandLow = source.bandLow;
+    }
+    if (source.bandHigh != null) {
+      condition.bandHigh = source.bandHigh;
+    }
+    if (source.bandLowTolerance != null) {
+      condition.bandLowTolerance = source.bandLowTolerance;
+    }
+    if (source.bandHighTolerance != null) {
+      condition.bandHighTolerance = source.bandHighTolerance;
+    }
+    initBand(condition);
+  }
+
   function hydrate(list, scorable) {
     return (list || []).map(function (c) {
       var kind = kindOf(c.factor);
@@ -370,6 +407,9 @@ function screenerApp(factors, initial) {
         condition.score = c.score == null ? legacyScored(condition.op) : !!c.score;
         condition.weight = c.weight == null ? 1 : c.weight;
         condition.direction = c.direction || defaultDirection(condition.op);
+        if (condition.direction === 'band') {
+          hydrateBand(condition, c);
+        }
       }
       return condition;
     });
@@ -388,6 +428,13 @@ function screenerApp(factors, initial) {
         if (c.score) {
           condition.direction = c.direction || defaultDirection(condition.op);
           condition.weight = Number(c.weight) > 0 ? Number(c.weight) : 1;
+          if (condition.direction === 'band') {
+            initBand(c);
+            condition.bandLow = Number(c.bandLow);
+            condition.bandHigh = Number(c.bandHigh);
+            condition.bandLowTolerance = Number(c.bandLowTolerance);
+            condition.bandHighTolerance = Number(c.bandHighTolerance);
+          }
         }
       }
       return condition;
@@ -442,6 +489,10 @@ function screenerApp(factors, initial) {
       var kind = this.kindOf(condition.factor);
       condition.op = kind === 'BOOLEAN' ? 'eq' : 'gte';
       condition.value = kind === 'BOOLEAN' ? 1 : 0;
+      delete condition.bandLow;
+      delete condition.bandHigh;
+      delete condition.bandLowTolerance;
+      delete condition.bandHighTolerance;
       if (kind === 'BOOLEAN') {
         delete condition.score;
         delete condition.weight;
@@ -455,6 +506,12 @@ function screenerApp(factors, initial) {
     /* 运算符变化时方向跟随其默认值；用户可再单独调整 */
     onOpChange: function (condition) {
       condition.direction = defaultDirection(condition.op);
+    },
+    /* 切换到区间最优时补齐区间默认值（理想值 = 当前阈值） */
+    onDirectionChange: function (condition) {
+      if (condition.direction === 'band') {
+        initBand(condition);
+      }
     },
     dslJson: function () {
       return JSON.stringify({
