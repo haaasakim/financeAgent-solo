@@ -31,6 +31,12 @@ public interface BacktestTaskMapper {
 
     long countAll();
 
+    /** 该策略未结束的任务数（PENDING / RUNNING），删除策略前检查。 */
+    long countActiveByStrategy(@Param("strategyId") long strategyId);
+
+    /** 删除该策略的全部任务记录，返回删除条数。 */
+    int deleteByStrategy(@Param("strategyId") long strategyId);
+
     int markRunning(@Param("id") long id,
                     @Param("progressTotal") int progressTotal,
                     @Param("startedAt") String startedAt);

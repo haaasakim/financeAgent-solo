@@ -14,6 +14,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.haaasaki.financeagent.common.exception.BusinessException;
+import org.haaasaki.financeagent.data.mapper.BacktestDailyMapper;
+import org.haaasaki.financeagent.data.mapper.BacktestTaskMapper;
+import org.haaasaki.financeagent.data.mapper.BacktestTradeMapper;
 import org.haaasaki.financeagent.data.mapper.ScreenerQueryMapper;
 import org.haaasaki.financeagent.data.mapper.StrategyMapper;
 import org.haaasaki.financeagent.data.model.FactorValue;
@@ -31,6 +34,7 @@ import org.haaasaki.financeagent.screener.factor.FactorRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 选股服务：条件树求值 + 评分排序 + 策略持久化。
@@ -48,15 +52,24 @@ public class ScreenerService {
 
     private final ScreenerQueryMapper screenerQueryMapper;
     private final StrategyMapper strategyMapper;
+    private final BacktestTaskMapper backtestTaskMapper;
+    private final BacktestDailyMapper backtestDailyMapper;
+    private final BacktestTradeMapper backtestTradeMapper;
     private final FactorRegistry factorRegistry;
     private final ObjectMapper objectMapper;
 
     public ScreenerService(ScreenerQueryMapper screenerQueryMapper,
                            StrategyMapper strategyMapper,
+                           BacktestTaskMapper backtestTaskMapper,
+                           BacktestDailyMapper backtestDailyMapper,
+                           BacktestTradeMapper backtestTradeMapper,
                            FactorRegistry factorRegistry,
                            ObjectMapper objectMapper) {
         this.screenerQueryMapper = screenerQueryMapper;
         this.strategyMapper = strategyMapper;
+        this.backtestTaskMapper = backtestTaskMapper;
+        this.backtestDailyMapper = backtestDailyMapper;
+        this.backtestTradeMapper = backtestTradeMapper;
         this.factorRegistry = factorRegistry;
         this.objectMapper = objectMapper;
     }
@@ -400,8 +413,22 @@ public class ScreenerService {
                 .orElseThrow(() -> new IllegalStateException("策略保存后无法读取"));
     }
 
-    public void deleteStrategy(long id) {
+    /**
+     * 删除策略并同步删除其全部回测记录（任务、日度序列、订单流水），返回删除任务数。
+     * 有 PENDING / RUNNING 任务时拒绝，避免执行中的任务写入半截数据。
+     */
+    @Transactional
+    public int deleteStrategy(long id) {
+        long active = backtestTaskMapper.countActiveByStrategy(id);
+        if (active > 0) {
+            throw new BusinessException(
+                    "该策略有 " + active + " 个回测任务未结束，请等任务完成后再删除");
+        }
+        backtestTradeMapper.deleteByStrategy(id);
+        backtestDailyMapper.deleteByStrategy(id);
+        int tasks = backtestTaskMapper.deleteByStrategy(id);
         strategyMapper.deleteById(id);
+        return tasks;
     }
 
     /**

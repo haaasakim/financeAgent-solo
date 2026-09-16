@@ -17,4 +17,7 @@ public interface BacktestDailyMapper {
     int batchInsert(@Param("list") List<BacktestDaily> rows);
 
     List<BacktestDaily> findByTask(@Param("taskId") long taskId);
+
+    /** 删除该策略全部任务的日度序列，返回删除条数。 */
+    int deleteByStrategy(@Param("strategyId") long strategyId);
 }

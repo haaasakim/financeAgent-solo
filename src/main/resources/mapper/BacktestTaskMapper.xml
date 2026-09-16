@@ -70,6 +70,16 @@
         SELECT COUNT(*) FROM backtest_task
     </select>
 
+    <select id="countActiveByStrategy" resultType="long">
+        SELECT COUNT(*) FROM backtest_task
+        WHERE strategy_id = #{strategyId} AND status IN ('PENDING', 'RUNNING')
+    </select>
+
+    <!-- 删除策略前先删日度与流水（子查询取该策略任务），最后删任务本身 -->
+    <delete id="deleteByStrategy">
+        DELETE FROM backtest_task WHERE strategy_id = #{strategyId}
+    </delete>
+
     <update id="markRunning">
         UPDATE backtest_task
         SET status = 'RUNNING', progress_done = 0, progress_total = #{progressTotal},

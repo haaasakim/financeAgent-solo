@@ -24,4 +24,7 @@ public interface BacktestTradeMapper {
 
     /** 任务的全部成交订单，按 orderNo 升序；供「按标的配对」使用。 */
     List<BacktestTrade> findFilledByTask(@Param("taskId") long taskId);
+
+    /** 删除该策略全部任务的订单流水，返回删除条数。 */
+    int deleteByStrategy(@Param("strategyId") long strategyId);
 }

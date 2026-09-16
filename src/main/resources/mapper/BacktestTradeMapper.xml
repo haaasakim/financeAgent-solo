@@ -58,4 +58,9 @@
         ORDER BY order_no
     </select>
 
+    <delete id="deleteByStrategy">
+        DELETE FROM backtest_trade
+        WHERE task_id IN (SELECT id FROM backtest_task WHERE strategy_id = #{strategyId})
+    </delete>
+
 </mapper>

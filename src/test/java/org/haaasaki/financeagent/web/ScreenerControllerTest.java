@@ -70,6 +70,9 @@ class ScreenerControllerTest {
         jdbcTemplate.update("DELETE FROM market_snapshot");
         jdbcTemplate.update("DELETE FROM instrument");
         jdbcTemplate.update("DELETE FROM strategy");
+        jdbcTemplate.update("DELETE FROM backtest_trade");
+        jdbcTemplate.update("DELETE FROM backtest_daily");
+        jdbcTemplate.update("DELETE FROM backtest_task");
 
         instrumentMapper.upsertBatch(List.of(
                 instrument("000001.SZ", "平安银行"),
@@ -276,6 +279,7 @@ class ScreenerControllerTest {
                 .andExpect(content().string(containsString("已保存策略：低估值")))
                 .andExpect(content().string(containsString("低估值")))
                 .andExpect(content().string(containsString("PE 低")))
+                .andExpect(content().string(containsString("回测记录将一并删除")))
                 .andExpect(content().string(containsString("/screener?strategyId=")));
 
         mockMvc.perform(post("/fragments/screener/strategies")
@@ -291,6 +295,55 @@ class ScreenerControllerTest {
                         .param("dsl", VALID_DSL))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("策略名不能为空")));
+    }
+
+    @Test
+    @DisplayName("策略删除：同步删除该策略的回测任务、日度与流水")
+    void deleteStrategyCascadesBacktestRecords() throws Exception {
+        screenerService.saveStrategy("待删", null, VALID_DSL);
+        long id = screenerService.listStrategies().get(0).id();
+        jdbcTemplate.update("INSERT INTO backtest_task (strategy_id, strategy_name, strategy_hash,"
+                + " engine_version, params_json, status, created_at)"
+                + " VALUES (?, '待删', 'h', '4', '{}', 'SUCCESS', '2026-09-13T00:00')", id);
+        Long taskId = jdbcTemplate.queryForObject(
+                "SELECT id FROM backtest_task WHERE strategy_id = ?", Long.class, id);
+        jdbcTemplate.update("INSERT INTO backtest_daily (task_id, trade_date, nav, created_at)"
+                + " VALUES (?, '2026-09-11', 1.0, '2026-09-13T00:00')", taskId);
+        jdbcTemplate.update("INSERT INTO backtest_trade (task_id, order_no, instrument_id, side,"
+                + " status, created_at)"
+                + " VALUES (?, 1, '000001.SZ', 'BUY', 'EXPIRED', '2026-09-13T00:00')", taskId);
+
+        mockMvc.perform(post("/fragments/screener/strategies/{id}/delete", id)
+                        .param("selectedStrategyId", String.valueOf(id)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("已同步删除 1 条回测记录")))
+                .andExpect(content().string(containsString("尚未保存策略")));
+
+        assertThat(screenerService.listStrategies()).isEmpty();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM backtest_task", Long.class))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM backtest_daily", Long.class))
+                .isZero();
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM backtest_trade", Long.class))
+                .isZero();
+    }
+
+    @Test
+    @DisplayName("策略删除：有未结束的回测任务时拒绝，策略与记录保留")
+    void deleteStrategyRefusesWhileTaskUnfinished() throws Exception {
+        screenerService.saveStrategy("执行中", null, VALID_DSL);
+        long id = screenerService.listStrategies().get(0).id();
+        jdbcTemplate.update("INSERT INTO backtest_task (strategy_id, strategy_name, strategy_hash,"
+                + " engine_version, params_json, status, created_at)"
+                + " VALUES (?, '执行中', 'h', '4', '{}', 'RUNNING', '2026-09-13T00:00')", id);
+
+        mockMvc.perform(post("/fragments/screener/strategies/{id}/delete", id))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("请等任务完成后再删除")));
+
+        assertThat(screenerService.listStrategies()).hasSize(1);
+        assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM backtest_task", Long.class))
+                .isEqualTo(1);
     }
 
     @Test

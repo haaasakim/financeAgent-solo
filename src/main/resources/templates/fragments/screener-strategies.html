@@ -20,7 +20,7 @@
             <div class="strategy-item-actions">
                 <a class="btn btn-sm" th:href="@{/backtest(strategyId=${s.id})}">回测</a>
                 <button class="btn btn-sm btn-danger-quiet"
-                        th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})},hx-confirm=|确认删除策略「${s.name}」？删除后不能恢复。|"
+                        th:attr="hx-post=@{/fragments/screener/strategies/{id}/delete(id=${s.id})},hx-confirm=|确认删除策略「${s.name}」？其全部回测记录将一并删除，且不能恢复。|"
                         hx-include="#selected-strategy-id"
                         hx-target="#strategy-list" hx-swap="outerHTML"
                         hx-disabled-elt="this">删除</button>

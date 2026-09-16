@@ -185,15 +185,22 @@ public class ScreenerController {
                                  @RequestParam(required = false) Long selectedStrategyId,
                                  HttpServletResponse response,
                                  Model model) {
-        screenerService.deleteStrategy(id);
         boolean deletedCurrent = selectedStrategyId != null && selectedStrategyId == id;
-        if (deletedCurrent) {
-            selectedStrategyId = null;
-            response.setHeader("HX-Replace-Url", "/screener");
-            model.addAttribute("notice", "已删除策略；当前条件仍保留，但尚未保存");
-            model.addAttribute("sourceLabel", "当前条件尚未保存");
-        } else {
-            model.addAttribute("notice", "已删除策略");
+        try {
+            int removedTasks = screenerService.deleteStrategy(id);
+            String cascade = removedTasks > 0 ? "，已同步删除 " + removedTasks + " 条回测记录" : "";
+            if (deletedCurrent) {
+                selectedStrategyId = null;
+                response.setHeader("HX-Replace-Url", "/screener");
+                model.addAttribute("notice", "已删除策略" + cascade + "；当前条件仍保留，但尚未保存");
+                model.addAttribute("sourceLabel", "当前条件尚未保存");
+            } else {
+                model.addAttribute("notice", "已删除策略" + cascade);
+                model.addAttribute("sourceLabel", selectedStrategyLabel(selectedStrategyId));
+            }
+        } catch (BusinessException e) {
+            log.warn("删除策略失败：{}", e.getMessage());
+            model.addAttribute("errorMessage", e.getMessage());
             model.addAttribute("sourceLabel", selectedStrategyLabel(selectedStrategyId));
         }
         model.addAttribute("strategies", screenerService.listStrategies());
