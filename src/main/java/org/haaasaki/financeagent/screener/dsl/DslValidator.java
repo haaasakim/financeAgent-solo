@@ -53,7 +53,7 @@ public final class DslValidator {
             if (definition == null || !definition.backtestable()) {
                 String label = definition == null ? condition.factor() : definition.label();
                 throw new BusinessException(
-                        "因子「" + label + "」无历史数据，暂不可用于回测");
+                        "因子「" + label + "」无历史数据，暂不可用于回看与回测");
             }
         }
     }

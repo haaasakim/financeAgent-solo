@@ -303,6 +303,54 @@ class ScreenerServiceTest {
     }
 
     @Test
+    @DisplayName("历史回看：按指定交易日截面取数与评分，无当日因子行的标的（停牌）不参与")
+    void screenAtUsesExactCrossSection() {
+        LocalDate history = TRADE_DATE.minusDays(300);
+        seedHistory(history);
+
+        ScreenerResult result = screenerService.screenAt(
+                all(c("return20", CompareOp.GT, 0)), history, 1);
+        assertThat(result.total()).isEqualTo(1);
+        assertThat(ids(result)).containsExactly("000001.SZ");
+        assertThat(scores(result)).containsExactly(100.0);
+        assertThat(result.rows().get(0).lastPrice()).isEqualTo(8.0);
+
+        ScreenerResult latest = screenerService.screen(all(c("return20", CompareOp.GT, 0)), 1);
+        assertThat(latest.total()).isGreaterThan(result.total());
+    }
+
+    @Test
+    @DisplayName("历史回看：占位因子（无历史数据源）被拒绝")
+    void screenAtRejectsFactorsWithoutHistory() {
+        assertThatThrownBy(() -> screenerService.screenAt(
+                all(c("dividendYield", CompareOp.GTE, 1)), TRADE_DATE, 1))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("暂不可用");
+    }
+
+    @Test
+    @DisplayName("回看日期解析：非交易日回退到最近交易日，超范围报错")
+    void resolveAsOfSnapsToLatestTradingDay() {
+        LocalDate history = TRADE_DATE.minusDays(300);
+        seedHistory(history);
+
+        assertThat(screenerService.resolveAsOf(TRADE_DATE)).isEqualTo(TRADE_DATE);
+        assertThat(screenerService.resolveAsOf(TRADE_DATE.plusDays(1))).isEqualTo(TRADE_DATE);
+        assertThat(screenerService.resolveAsOf(history)).isEqualTo(history);
+        assertThatThrownBy(() -> screenerService.resolveAsOf(TRADE_DATE.minusYears(10)))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("没有数据");
+    }
+
+    @Test
+    @DisplayName("数据范围：最早 / 最新因子交易日来自本地数据")
+    void exposesFactorDateRange() {
+        LocalDate history = TRADE_DATE.minusDays(300);
+        assertThat(screenerService.dataStartDate()).isEqualTo(TRADE_DATE);
+        seedHistory(history);
+        assertThat(screenerService.dataStartDate()).isEqualTo(history);
+        assertThat(screenerService.dataEndDate()).isEqualTo(TRADE_DATE);
+    }
+
+    @Test
     @DisplayName("策略保存：同名视为覆盖更新，加载与删除正常")
     void savesAndLoadsStrategy() {
         String dslJson = screenerService.toJson(all(c("peTtm", CompareOp.LTE, 30)));
@@ -492,10 +540,26 @@ class ScreenerServiceTest {
                 null, 100_000L, null, null, null, DailyBar.ADJ_QFQ, "TEST");
     }
 
+    /** 历史截面数据：仅 000001.SZ 当日上涨，600000.SH 当日无因子行（模拟停牌）。 */
+    private void seedHistory(LocalDate date) {
+        dailyBarMapper.upsertBatch(List.of(
+                bar("000001.SZ", date, 8.0),
+                bar("600000.SH", date, 7.0)));
+        factorDailyMapper.upsertBatch(List.of(
+                factor("000001.SZ", date, 10.0, 10.0, 0.20, 0.30, 0.010, -0.05),
+                factor("600000.SH", date, 10.0, 10.0, -0.05, -0.10, 0.050, -0.50)));
+    }
+
     private FactorDaily factor(String id, double ma20, double ma60,
                                double return20, double return60,
                                double volatility20, double pctFrom52wHigh) {
-        return new FactorDaily(id, TRADE_DATE, 10.0, 10.0, ma20, ma60,
+        return factor(id, TRADE_DATE, ma20, ma60, return20, return60, volatility20, pctFrom52wHigh);
+    }
+
+    private FactorDaily factor(String id, LocalDate date, double ma20, double ma60,
+                               double return20, double return60,
+                               double volatility20, double pctFrom52wHigh) {
+        return new FactorDaily(id, date, 10.0, 10.0, ma20, ma60,
                 0.0, 0.0, 0.0, 50.0, 50.0, 50.0,
                 return20, return60, volatility20, pctFrom52wHigh,
                 null, null, null, null, null, null, null, null, null);

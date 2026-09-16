@@ -1,5 +1,5 @@
 <!--
-  选股结果片段：由 POST /fragments/screener/results 返回，outerHTML 替换 #screener-results。
+  选股结果片段：由选股结果接口返回，outerHTML 替换 #screener-results；完整页面恢复时也复用。
   分页按钮重新 POST 本片段，dsl 由 #screener-form 的隐藏字段携带。
 -->
 <div id="screener-results" th:fragment="results" xmlns:th="http://www.thymeleaf.org">
@@ -11,7 +11,11 @@
 
         <div th:if="${!result.exceeded()}">
         <div class="pager" style="padding-top:0;padding-bottom:10px">
-            <span th:text="|共 ${result.total} 条 · 显示第 ${result.from()} - ${result.to()} 条|">--</span>
+            <span>
+                <span th:if="${asOf != null}" class="tag tag-warn"
+                      th:text="|回看 ${asOfLabel}|" th:title="|按 ${asOfLabel} 收盘截面求值，口径与回测一致|">回看</span>
+                <span th:text="|共 ${result.total} 条 · 显示第 ${result.from()} - ${result.to()} 条|">--</span>
+            </span>
             <div class="pager-btns">
                 <button class="btn btn-sm" th:disabled="${!result.hasPrev()}"
                         th:attr="hx-post=@{/fragments/screener/results(page=${result.page - 1})}"
@@ -32,7 +36,7 @@
                     <th>代码</th>
                     <th>名称</th>
                     <th class="num">评分</th>
-                    <th class="num">最新价</th>
+                    <th class="num" th:text="${asOf == null} ? '最新价' : '当日收盘'">最新价</th>
                     <th class="num">涨跌幅</th>
                     <th class="num">PE-TTM</th>
                     <th class="num">PB</th>

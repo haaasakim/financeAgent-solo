@@ -105,6 +105,9 @@ class ScreenerControllerTest {
                 .andExpect(content().string(containsString("addConditionTo(section")))
                 // 未加载已保存策略时「拿去回测」置灰，并提示先保存
                 .andExpect(content().string(containsString("先保存为策略后再回测")))
+                // 回看日期输入：范围来自本地数据，留空为最新截面
+                .andExpect(content().string(containsString("name=\"asOf\"")))
+                .andExpect(content().string(containsString("2026-09-11")))
                 // 条件行下拉选项必须服务端渲染，否则 Alpine x-model 会因选项未就绪选中首项
                 .andExpect(content().string(containsString("<option value=\"peTtm\">PE-TTM</option>")))
                 .andExpect(content().string(containsString("<option value=\"lte\">≤</option>")));
@@ -148,6 +151,21 @@ class ScreenerControllerTest {
                 .andExpect(content().string(containsString("共 1 条")))
                 .andExpect(content().string(containsString("第 1 / 1 页")))
                 .andExpect(content().string(containsString("/market/stock/000001.SZ")));
+    }
+
+    @Test
+    @DisplayName("结果状态：HTMX 推入可恢复 URL，重新进入选股页时恢复条件与结果")
+    void resultStateCanBeRestoredFromUrl() throws Exception {
+        mockMvc.perform(post("/fragments/screener/results").param("dsl", VALID_DSL))
+                .andExpect(status().isOk())
+                .andExpect(header().string("HX-Push-Url",
+                        org.hamcrest.Matchers.containsString("/screener?dsl=")));
+
+        mockMvc.perform(get("/screener").param("dsl", VALID_DSL))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("已恢复上次选股条件")))
+                .andExpect(content().string(containsString("平安银行")))
+                .andExpect(content().string(containsString("id=\"screener-results\"")));
     }
 
     @Test
@@ -213,6 +231,39 @@ class ScreenerControllerTest {
     }
 
     @Test
+    @DisplayName("结果片段：回看日期按历史截面求值并标注，非交易日自动回退")
+    void resultsFragmentSupportsHistoricalDate() throws Exception {
+        String dsl = "{\"all\":[{\"factor\":\"return20\",\"op\":\"gt\",\"value\":0}],"
+                + "\"any\":[],\"not\":[]}";
+        LocalDate history = TRADE_DATE.minusDays(30);
+        dailyBarMapper.upsertBatch(List.of(
+                bar("000001.SZ", history, 8.0),
+                bar("600000.SH", history, 7.0)));
+        factorDailyMapper.upsertBatch(List.of(
+                factor("000001.SZ", history, 0.20),
+                factor("600000.SH", history, -0.05)));
+
+        mockMvc.perform(post("/fragments/screener/results").param("dsl", dsl)
+                        .param("asOf", history.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("回看 " + history)))
+                .andExpect(content().string(containsString("当日收盘")))
+                .andExpect(content().string(containsString("8.00")))
+                .andExpect(content().string(containsString("平安银行")))
+                .andExpect(content().string(not(containsString("浦发银行"))));
+
+        mockMvc.perform(post("/fragments/screener/results").param("dsl", dsl)
+                        .param("asOf", history.plusDays(1).toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("已按最近交易日")));
+
+        mockMvc.perform(post("/fragments/screener/results").param("dsl", dsl)
+                        .param("asOf", "2016-01-04"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("所选日期附近没有数据")));
+    }
+
+    @Test
     @DisplayName("策略片段：保存成功刷新列表，重名覆盖，名称校验")
     void strategyFragmentSavesAndLists() throws Exception {
         mockMvc.perform(post("/fragments/screener/strategies")
@@ -270,12 +321,20 @@ class ScreenerControllerTest {
     }
 
     private DailyBar bar(String id, double close) {
-        return new DailyBar(id, TRADE_DATE, close, close, close, close,
+        return bar(id, TRADE_DATE, close);
+    }
+
+    private DailyBar bar(String id, LocalDate date, double close) {
+        return new DailyBar(id, date, close, close, close, close,
                 null, 100_000L, null, null, null, DailyBar.ADJ_QFQ, "TEST");
     }
 
     private FactorDaily factor(String id, double return20) {
-        return new FactorDaily(id, TRADE_DATE, 10.0, 10.0, 10.0, 10.0,
+        return factor(id, TRADE_DATE, return20);
+    }
+
+    private FactorDaily factor(String id, LocalDate date, double return20) {
+        return new FactorDaily(id, date, 10.0, 10.0, 10.0, 10.0,
                 0.0, 0.0, 0.0, 50.0, 50.0, 50.0,
                 return20, return20, 0.01, -0.05, null, null, null, null, null, null, null, null, null);
     }

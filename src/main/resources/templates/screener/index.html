@@ -177,6 +177,12 @@
                           hx-target="#screener-results" hx-swap="outerHTML"
                           hx-indicator="#screener-loading" hx-disabled-elt="button[type='submit']">
                         <input type="hidden" name="dsl" :value="dslJson()">
+                        <label class="asof-field"
+                               title="选择历史交易日，回看当天收盘后的选股结果；留空为最新截面">
+                            回看
+                            <input type="date" name="asOf" th:value="${selectedAsOf}"
+                                   th:min="${dataStart}" th:max="${dataEnd}">
+                        </label>
                         <button class="btn btn-primary" type="submit">执行选股</button>
                     </form>
                     <span id="strategy-backtest-action">
@@ -204,8 +210,11 @@
                 <div class="card-hd">
                     <div class="card-title">选股结果</div>
                 </div>
-                <div id="screener-results" aria-live="polite">
-                    <div class="empty">设置条件后点击「执行选股」</div>
+                <div th:if="${result != null}"
+                     th:replace="~{fragments/screener-results :: results}"></div>
+                <div id="screener-results" th:unless="${result != null}" aria-live="polite">
+                    <div class="notice" th:if="${errorMessage != null}" th:text="${errorMessage}">条件无效</div>
+                    <div class="empty" th:if="${errorMessage == null}">设置条件后点击「执行选股」</div>
                 </div>
             </div>
         </div>

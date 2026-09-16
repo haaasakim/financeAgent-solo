@@ -1,5 +1,6 @@
 package org.haaasaki.financeagent.web;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -10,6 +11,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.haaasaki.financeagent.common.exception.BusinessException;
 import org.haaasaki.financeagent.data.model.Strategy;
 import org.haaasaki.financeagent.screener.ScreenerService;
+import org.haaasaki.financeagent.screener.ScreenerResult;
 import org.haaasaki.financeagent.screener.dsl.ScreenerDsl;
 import org.haaasaki.financeagent.screener.factor.FactorDefinition;
 import org.haaasaki.financeagent.screener.factor.FactorRegistry;
@@ -17,12 +19,14 @@ import org.haaasaki.financeagent.screener.template.PresetTemplates;
 import org.haaasaki.financeagent.screener.template.StrategyTemplate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * 选股模块控制器：页面、结果片段、策略保存与删除。
@@ -53,6 +57,10 @@ public class ScreenerController {
     @GetMapping("/screener")
     public String page(@RequestParam(required = false) String template,
                        @RequestParam(required = false) Long strategyId,
+                       @RequestParam(required = false) String dsl,
+                       @RequestParam(required = false)
+                       @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,
+                       @RequestParam(defaultValue = "1") int page,
                        Model model) {
         ScreenerDsl initial = ScreenerDsl.empty();
         String sourceLabel = null;
@@ -75,6 +83,19 @@ public class ScreenerController {
             }
         }
 
+        // HTMX 选股结果通过 URL 保存后，浏览器返回 /screener 时恢复条件与结果。
+        if (dsl != null && !dsl.isBlank()) {
+            try {
+                initial = screenerService.parse(dsl);
+                sourceLabel = "已恢复上次选股条件";
+                addResult(model, initial, asOf, page);
+                model.addAttribute("selectedAsOf", asOf);
+            } catch (BusinessException e) {
+                log.warn("恢复选股结果失败：{}", e.getMessage());
+                model.addAttribute("errorMessage", e.getMessage());
+            }
+        }
+
         model.addAttribute("factorGroups", factorRegistry.groups());
         model.addAttribute("presets", presetTemplates.all());
         model.addAttribute("strategies", screenerService.listStrategies());
@@ -83,21 +104,55 @@ public class ScreenerController {
         model.addAttribute("availableFactorsJson", availableFactorsJson());
         model.addAttribute("sourceLabel", sourceLabel);
         model.addAttribute("selectedStrategyId", strategyId);
+        if (!model.containsAttribute("selectedAsOf")) {
+            model.addAttribute("selectedAsOf", null);
+        }
+        model.addAttribute("dataStart", screenerService.dataStartDate());
+        model.addAttribute("dataEnd", screenerService.dataEndDate());
         return "screener/index";
     }
 
     @PostMapping("/fragments/screener/results")
     public String results(@RequestParam String dsl,
+                          @RequestParam(required = false)
+                          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOf,
                           @RequestParam(defaultValue = "1") int page,
+                          HttpServletResponse response,
                           Model model) {
         try {
-            model.addAttribute("result",
-                    screenerService.screen(screenerService.parse(dsl), page));
+            ScreenerDsl parsed = screenerService.parse(dsl);
+            addResult(model, parsed, asOf, page);
+            ScreenerResult result = (ScreenerResult) model.getAttribute("result");
+            response.setHeader("HX-Push-Url", resultUrl(screenerService.toJson(parsed), asOf,
+                    result == null ? Math.max(1, page) : result.page()));
         } catch (BusinessException e) {
             log.warn("选股条件无效：{}", e.getMessage());
             model.addAttribute("errorMessage", e.getMessage());
         }
         return "fragments/screener-results";
+    }
+
+    private void addResult(Model model, ScreenerDsl dsl, LocalDate requestedAsOf, int page) {
+        if (requestedAsOf == null) {
+            model.addAttribute("result", screenerService.screen(dsl, page));
+            return;
+        }
+        LocalDate resolved = screenerService.resolveAsOf(requestedAsOf);
+        model.addAttribute("result", screenerService.screenAt(dsl, resolved, page));
+        model.addAttribute("asOf", resolved);
+        model.addAttribute("asOfLabel", resolved.equals(requestedAsOf)
+                ? resolved.toString()
+                : resolved + "（已按最近交易日）");
+    }
+
+    private String resultUrl(String dsl, LocalDate asOf, int page) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/screener")
+                .queryParam("dsl", dsl)
+                .queryParam("page", Math.max(1, page));
+        if (asOf != null) {
+            builder.queryParam("asOf", asOf);
+        }
+        return builder.build().encode().toUriString();
     }
 
     @PostMapping("/fragments/screener/strategies")

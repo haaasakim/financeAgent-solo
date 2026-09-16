@@ -109,6 +109,61 @@ public class ScreenerService {
     }
 
     /**
+     * 历史截面回看：以 {@code asOf} 交易日为截面，命中、评分与排序口径与回测一致
+     * （不可回测因子由校验拒绝），返回匹配总数与当前页结果（每页 50）。
+     */
+    public ScreenerResult screenAt(ScreenerDsl dsl, LocalDate asOf, int page) {
+        DslValidator.validateBacktest(dsl, factorRegistry);
+
+        List<SqlCondition> all = resolve(dsl.all(), true);
+        List<SqlCondition> any = resolve(dsl.any(), true);
+        List<SqlCondition> not = resolve(dsl.not(), true);
+
+        long total = screenerQueryMapper.countCandidatesAt(asOf, all, any, not);
+        int currentPage = Math.max(1, page);
+        if (total > ScreenerResult.MAX_MATCHES) {
+            return new ScreenerResult(List.of(), total, 1, ScreenerResult.DEFAULT_SIZE);
+        }
+        if (total == 0) {
+            return new ScreenerResult(List.of(), 0, currentPage, ScreenerResult.DEFAULT_SIZE);
+        }
+
+        List<ScreenerRow> ranked = rank(
+                screenerQueryMapper.findAllCandidatesAt(asOf, all, any, not), dsl, asOf);
+        int offset = (currentPage - 1) * ScreenerResult.DEFAULT_SIZE;
+        List<ScreenerRow> rows = offset >= ranked.size()
+                ? List.of()
+                : List.copyOf(ranked.subList(offset,
+                        Math.min(ranked.size(), offset + ScreenerResult.DEFAULT_SIZE)));
+        return new ScreenerResult(rows, total, currentPage, ScreenerResult.DEFAULT_SIZE);
+    }
+
+    /**
+     * 回看日期解析：所选日期无因子行（周末、假日、停牌日或数据范围外）时，
+     * 向前最多 15 个自然日找最近的交易日；找不到抛用户可见异常。
+     */
+    public LocalDate resolveAsOf(LocalDate requested) {
+        LocalDate date = requested;
+        for (int i = 0; i <= 15; i++) {
+            if (screenerQueryMapper.countFactorRowsAt(date) > 0) {
+                return date;
+            }
+            date = date.minusDays(1);
+        }
+        throw new BusinessException("所选日期附近没有数据，请选择本地行情范围内的交易日");
+    }
+
+    /** 本地因子数据的最早交易日；空库返回 null。 */
+    public LocalDate dataStartDate() {
+        return screenerQueryMapper.minFactorDate();
+    }
+
+    /** 本地因子数据的最新交易日；空库返回 null。 */
+    public LocalDate dataEndDate() {
+        return screenerQueryMapper.maxFactorDate();
+    }
+
+    /**
      * 回测前的策略校验：拒绝无历史序列的因子（估值 / 财务占位）。
      */
     public void validateBacktest(ScreenerDsl dsl) {

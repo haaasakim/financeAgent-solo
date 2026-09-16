@@ -117,7 +117,8 @@ code {
 /* ---------- 市场模块 ---------- */
 
 .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
-input[type=text], input[type=number], select {
+.asof-field { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: 12px; }
+input[type=text], input[type=number], input[type=date], select {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 7px 10px;
