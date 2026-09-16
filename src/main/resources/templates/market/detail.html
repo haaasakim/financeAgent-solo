@@ -10,7 +10,8 @@
     <div class="card">
         <div class="card-hd">
             <div class="card-title">
-                <a class="back" th:href="@{/market}">← 市场</a>
+                <a class="back" href="/market" data-history-back
+                   title="返回刚才的来源页面；直接打开时返回市场">← 返回上一页</a>
                 <span th:text="${ins.name}">浦发银行</span>
                 <span class="code" th:text="${ins.instrumentId}">600000.SH</span>
             </div>

@@ -107,6 +107,7 @@ class MarketControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("浦发银行")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("__KLINE__")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("data-history-back")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("前复权")));
     }
 

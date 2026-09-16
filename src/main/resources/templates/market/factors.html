@@ -11,9 +11,10 @@
         <div class="card-hd">
             <div class="card-title">
                 <a class="back" th:if="${view.instrument != null}"
-                   th:href="@{/market/stock/{id}(id=${instrumentId})}">← 个股详情</a>
+                   th:href="@{/market/stock/{id}(id=${instrumentId})}" data-history-back
+                   title="返回刚才的来源页面；直接打开时返回个股详情">← 返回上一页</a>
                 <a class="back" th:unless="${view.instrument != null}"
-                   th:href="@{/market}">← 市场</a>
+                   href="/market" data-history-back title="返回刚才的来源页面；直接打开时返回市场">← 返回上一页</a>
                 技术因子
                 <span class="code" th:text="${instrumentId}">000001.SZ</span>
             </div>
