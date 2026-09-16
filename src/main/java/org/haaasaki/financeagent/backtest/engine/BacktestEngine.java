@@ -42,6 +42,8 @@ public class BacktestEngine {
     private static final BigDecimal ZERO = new BigDecimal("0.00");
     private static final int LOT_SIZE = 100;
     private static final int SEASONED_BARS = 5;
+    /** 买入整手递减试算的最大次数（WI-013 兜底，防止微小价格下空转）。 */
+    private static final int MAX_BUY_ADJUST_ATTEMPTS = 10_000;
 
     private final ScreenerService screenerService;
     private final DailyBarMapper dailyBarMapper;
@@ -126,7 +128,7 @@ public class BacktestEngine {
             if (signalDates.contains(day) && i + 1 < days.size()) {
                 LocalDate executionDay = days.get(i + 1);
                 List<ScreenerRow> targets = targets(dsl, day, params.topN(),
-                        firstBars, dayIndex, instruments);
+                        firstBars, dayIndex, instruments, priceBook);
                 // 固定 N 槽等权（WI-009）：每只目标预算 = 信号日收盘组合净值 / topN
                 BigDecimal slotBudget = slotBudget(portfolio, priceBook, day, params.topN());
                 orderSeq = rebalance(pending, orders, portfolio, targets, day, executionDay,
@@ -161,17 +163,19 @@ public class BacktestEngine {
         return new BacktestResult(daily, trades);
     }
 
-    /** 信号求值：评分前 N，剔除上市不足 5 个交易日与无档案的标的。 */
+    /** 信号求值：评分前 N，剔除不可交易（前复权失真、WI-013）、上市不足 5 个交易日与无档案的标的。 */
     private List<ScreenerRow> targets(ScreenerDsl dsl, LocalDate signal, int topN,
                                       Map<String, LocalDate> firstBars,
                                       Map<LocalDate, Integer> dayIndex,
-                                      Map<String, Instrument> instruments) {
+                                      Map<String, Instrument> instruments,
+                                      PriceBook priceBook) {
         List<ScreenerRow> ranked = screenerService.evaluateAt(dsl, signal, Integer.MAX_VALUE);
         Integer signalIndex = dayIndex.get(signal);
         List<ScreenerRow> targets = new ArrayList<>(topN);
         for (ScreenerRow row : ranked) {
             if (!instruments.containsKey(row.instrumentId()) || !seasoned(row.instrumentId(),
-                    firstBars, dayIndex, signalIndex)) {
+                    firstBars, dayIndex, signalIndex)
+                    || !priceBook.tradableAt(row.instrumentId(), signal)) {
                 continue;
             }
             targets.add(row);
@@ -221,6 +225,11 @@ public class BacktestEngine {
             order.defer(nextDay(days, dayIndex, day), BacktestTrade.REASON_SUSPENDED);
             return;
         }
+        if (!priceBook.usableBar(bar) || !priceBook.tradableAt(order.instrumentId(), day)) {
+            // 前复权失真价格不可成交（WI-013）：与停牌一致延后重试
+            order.defer(nextDay(days, dayIndex, day), BacktestTrade.REASON_BAD_PRICE);
+            return;
+        }
         if (oneWord(bar, instruments.get(order.instrumentId()), false)) {
             order.defer(nextDay(days, dayIndex, day), BacktestTrade.REASON_LIMIT_DOWN);
             return;
@@ -251,6 +260,12 @@ public class BacktestEngine {
             order.defer(nextDay(days, dayIndex, day), BacktestTrade.REASON_SUSPENDED);
             return;
         }
+        if (!priceBook.usableBar(bar) || !priceBook.tradableAt(order.instrumentId(), day)) {
+            // 前复权失真价格不可成交（WI-013）：买单作废，不以失真价补成交
+            order.expire(BacktestTrade.REASON_BAD_PRICE);
+            pending.remove(order);
+            return;
+        }
         if (oneWord(bar, instruments.get(order.instrumentId()), true)) {
             order.defer(nextDay(days, dayIndex, day), BacktestTrade.REASON_LIMIT_UP);
             return;
@@ -264,7 +279,8 @@ public class BacktestEngine {
 
         BigDecimal amount = ZERO;
         BigDecimal fee = ZERO;
-        while (shares > 0) {
+        int attempts = 0;
+        while (shares > 0 && attempts++ < MAX_BUY_ADJUST_ATTEMPTS) {
             amount = price.multiply(BigDecimal.valueOf(shares)).setScale(2, RoundingMode.HALF_UP);
             fee = cost.buyFee(amount);
             if (amount.add(fee).compareTo(portfolio.cash()) <= 0) {
@@ -272,7 +288,7 @@ public class BacktestEngine {
             }
             shares -= LOT_SIZE;
         }
-        if (shares == 0) {
+        if (shares == 0 || attempts >= MAX_BUY_ADJUST_ATTEMPTS) {
             order.expire(BacktestTrade.REASON_CASH);
             pending.remove(order);
             return;
@@ -305,7 +321,8 @@ public class BacktestEngine {
             boolean pendingSell = pending.stream().anyMatch(order ->
                     BacktestTrade.SIDE_SELL.equals(order.side())
                             && order.instrumentId().equals(position.instrumentId()));
-            if (pendingSell || position.shares() <= 0) {
+            if (pendingSell || position.shares() <= 0
+                    || !priceBook.tradableAt(position.instrumentId(), day)) {
                 continue;
             }
             Double close = priceBook.closeAt(position.instrumentId(), day);

@@ -45,7 +45,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class BacktestService {
 
     /** 引擎版本：2 起建仓口径为固定 N 槽等权（WI-009），3 起支持出场风控（WI-010）。 */
-    public static final String ENGINE_VERSION = "3";
+    /** 引擎版本：4 = 增加前复权失真价格防护（WI-013）；3 及以下的结果可能与假成交混用。 */
+    public static final String ENGINE_VERSION = "4";
     public static final int TASK_PAGE_SIZE = 20;
     public static final int TRADE_PAGE_SIZE = 50;
     public static final int TRIP_PAGE_SIZE = 50;

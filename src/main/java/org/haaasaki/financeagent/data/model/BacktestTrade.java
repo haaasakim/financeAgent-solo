@@ -56,6 +56,9 @@ public record BacktestTrade(
     public static final String REASON_CANCELLED = "调仓取消";
     public static final String REASON_END = "期末未成交";
 
+    /** 前复权失真价格（WI-013）：失真窗口内不可交易。 */
+    public static final String REASON_BAD_PRICE = "价格失真";
+
     /** FILLED 卖单的成交说明（WI-010 出场风控）。 */
     public static final String NOTE_STOP_LOSS = "止损卖出";
     public static final String NOTE_TIME_STOP = "时间止损";

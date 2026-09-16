@@ -365,6 +365,50 @@ class BacktestEngineTest {
         assertThat(buy.filledDate()).isEqualTo(LocalDate.of(2026, 9, 1));
     }
 
+    @Test
+    @DisplayName("前复权失真（WI-013）：失真标的从目标剔除，买卖不产生假盈利")
+    void skipsUntradableInstrumentWithDistortedPrices() {
+        factorDailyMapper.upsertBatch(List.of(
+                factor(A, LocalDate.of(2026, 8, 31), 0.05),
+                factor(B, LocalDate.of(2026, 8, 31), 0.10)));
+        // B 价格失真（负价），评分更高但不可交易 → 目标顺延为 A
+        List<DailyBar> distorted = new ArrayList<>();
+        for (LocalDate current : tradingDays) {
+            distorted.add(bar(B, current, -1.0, -1.0, null));
+        }
+        jdbcTemplate.update("DELETE FROM daily_bar WHERE instrument_id = ? AND trade_date >= ?",
+                B, START.toString());
+        dailyBarMapper.upsertBatch(distorted);
+
+        BacktestResult result = backtestEngine.run(1, params(RebalanceFrequency.MONTHLY, 1,
+                new BigDecimal("100000")), dsl(), null);
+
+        assertThat(result.trades()).hasSize(1);
+        BacktestTrade buy = result.trades().get(0);
+        assertThat(buy.instrumentId()).isEqualTo(A);
+        assertThat(buy.status()).isEqualTo(BacktestTrade.STATUS_FILLED);
+        assertThat(result.trades()).noneMatch(trade -> trade.price() != null && trade.price() <= 0);
+        assertThat(result.daily().get(result.daily().size() - 1).nav()).isPositive();
+    }
+
+    @Test
+    @DisplayName("0 价 bar 不再除零崩溃：失真标的整段剔除，不产生委托与假成交（WI-013）")
+    void zeroPriceBarExpiresBuyWithoutCrash() {
+        factorDailyMapper.upsertBatch(List.of(factor(A, LocalDate.of(2026, 8, 31), 0.10)));
+        LocalDate execution = LocalDate.of(2026, 9, 1);
+        jdbcTemplate.update("DELETE FROM daily_bar WHERE instrument_id = ? AND trade_date = ?",
+                A, execution.toString());
+        dailyBarMapper.upsertBatch(List.of(new DailyBar(A, execution, 0.0, 10.5, 10.4, 10.2, 10.1,
+                100_000L, null, null, null, DailyBar.ADJ_QFQ, "TEST")));
+
+        BacktestResult result = backtestEngine.run(1, params(RebalanceFrequency.MONTHLY, 1,
+                new BigDecimal("100000")), dsl(), null);
+
+        assertThat(result.trades()).isEmpty();
+        assertThat(result.daily().get(result.daily().size() - 1).nav())
+                .isEqualTo(100_000.0);
+    }
+
     private BacktestParams params(RebalanceFrequency frequency, int topN, BigDecimal capital) {
         return params(frequency, topN, capital, null, 0);
     }
