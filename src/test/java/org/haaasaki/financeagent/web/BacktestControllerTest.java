@@ -123,8 +123,8 @@ class BacktestControllerTest {
     void usesDefaultsWithoutTask() throws Exception {
         mockMvc.perform(get("/backtest"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("value=\"MONTHLY\" selected=\"selected\"")))
-                .andExpect(content().string(containsString("name=\"topN\" value=\"20\"")))
+                .andExpect(content().string(containsString("value=\"DAILY\" selected=\"selected\"")))
+                .andExpect(content().string(containsString("name=\"topN\" value=\"5\"")))
                 .andExpect(content().string(containsString("min=\"1\" max=\"100\"")))
                 .andExpect(content().string(containsString("name=\"stopLossPct\" value=\"12\"")))
                 .andExpect(content().string(containsString("name=\"timeStopDays\" value=\"0\"")))

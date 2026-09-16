@@ -106,14 +106,14 @@ public class BacktestController {
         return backtestService.recentTasks(page, sort, desc);
     }
 
-    /** 表单默认值：新回测为最近 3 年 / 每月 / Top20 / 100 万 / 默认费率与沪深300。 */
+    /** 表单默认值：新回测为最近 3 年 / 每日 / Top5 / 100 万 / 默认费率与沪深300。 */
     private void addFormDefaults(Model model, Long strategyId) {
         LocalDate dataThrough = backtestService.dataThrough().orElse(null);
         model.addAttribute("defaultEnd", dataThrough);
         model.addAttribute("defaultStart", dataThrough == null ? null : dataThrough.minusYears(3));
         model.addAttribute("selectedStrategyId", strategyId);
-        model.addAttribute("selectedFrequency", RebalanceFrequency.MONTHLY.name());
-        model.addAttribute("selectedTopN", 20);
+        model.addAttribute("selectedFrequency", RebalanceFrequency.DAILY.name());
+        model.addAttribute("selectedTopN", 5);
         model.addAttribute("defaultInitialCapital", "1000000");
         model.addAttribute("defaultCommissionRatePct", "0.03");
         model.addAttribute("defaultStampTaxPct", "0.05");
@@ -153,8 +153,8 @@ public class BacktestController {
     public String run(@RequestParam long strategyId,
                       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
                       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-                      @RequestParam(defaultValue = "MONTHLY") String frequency,
-                      @RequestParam(defaultValue = "20") int topN,
+                      @RequestParam(defaultValue = "DAILY") String frequency,
+                      @RequestParam(defaultValue = "5") int topN,
                       @RequestParam BigDecimal initialCapital,
                       @RequestParam(defaultValue = "0.03") BigDecimal commissionRatePct,
                       @RequestParam(defaultValue = "0.05") BigDecimal stampTaxPct,
