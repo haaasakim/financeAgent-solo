@@ -111,6 +111,10 @@ class ScreenerControllerTest {
                 // 回看日期输入：范围来自本地数据，留空为最新截面
                 .andExpect(content().string(containsString("name=\"asOf\"")))
                 .andExpect(content().string(containsString("2026-09-11")))
+                // 评分方向含区间最优（WI-014），区间输入随方向显隐
+                .andExpect(content().string(containsString(">区间最优</option>")))
+                .andExpect(content().string(containsString("cond.bandLow")))
+                .andExpect(content().string(containsString("cond.bandHighTolerance")))
                 // 条件行下拉选项必须服务端渲染，否则 Alpine x-model 会因选项未就绪选中首项
                 .andExpect(content().string(containsString("<option value=\"peTtm\">PE-TTM</option>")))
                 .andExpect(content().string(containsString("<option value=\"lte\">≤</option>")));
@@ -188,6 +192,27 @@ class ScreenerControllerTest {
                         .param("dsl", "{\"all\":[],\"any\":[],\"not\":[]}"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("请至少设置一个条件")));
+
+        mockMvc.perform(post("/fragments/screener/results")
+                        .param("dsl", "{\"all\":[{\"factor\":\"return20\",\"op\":\"gt\",\"value\":0,"
+                                + "\"score\":true,\"direction\":\"band\",\"bandLow\":5,"
+                                + "\"bandHigh\":2,\"bandLowTolerance\":1,\"bandHighTolerance\":1}],"
+                                + "\"any\":[],\"not\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("区间下限不能大于上限")));
+    }
+
+    @Test
+    @DisplayName("结果片段：区间评分条件按区间子分排序渲染")
+    void resultsFragmentRendersBandScore() throws Exception {
+        mockMvc.perform(post("/fragments/screener/results")
+                        .param("dsl", "{\"all\":[{\"factor\":\"return20\",\"op\":\"gt\",\"value\":0,"
+                                + "\"score\":true,\"weight\":1,\"direction\":\"band\",\"bandLow\":5,"
+                                + "\"bandHigh\":20,\"bandLowTolerance\":5,\"bandHighTolerance\":5}],"
+                                + "\"any\":[],\"not\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("平安银行")))
+                .andExpect(content().string(containsString("100.0")));
     }
 
     @Test

@@ -254,11 +254,12 @@ public class ScreenerService {
                 continue;
             }
             boolean higherBetter;
+            ScoreDirection direction = null;
             if (explicit) {
                 if (!Boolean.TRUE.equals(condition.score())) {
                     continue;
                 }
-                ScoreDirection direction = condition.direction() != null
+                direction = condition.direction() != null
                         ? condition.direction() : ScoreDirection.defaultFor(condition.op());
                 if (direction == null) {
                     // eq 未指定方向已由校验拒绝；此处防御性跳过
@@ -279,8 +280,14 @@ public class ScreenerService {
                     : definition.expression();
             double weight = explicit && condition.weight() != null
                     ? condition.weight() : 1.0;
+            boolean band = direction == ScoreDirection.BAND;
             target.add(new ScoringCondition(definition.key(), expression,
-                    condition.op(), condition.value(), higherBetter, weight, anyGroup));
+                    condition.op(), condition.value(), higherBetter, weight, anyGroup,
+                    band,
+                    band ? condition.bandLow() : null,
+                    band ? condition.bandHigh() : null,
+                    band ? condition.bandLowTolerance() : null,
+                    band ? condition.bandHighTolerance() : null));
         }
     }
 
@@ -327,8 +334,11 @@ public class ScreenerService {
                 if (condition.anyGroup() && !satisfies(condition, value)) {
                     continue;
                 }
-                sum += condition.weight() * percentile(distributions.get(condition.factor()), value,
-                        condition.higherBetter());
+                double sub = condition.band()
+                        ? bandScore(value, condition)
+                        : percentile(distributions.get(condition.factor()), value,
+                                condition.higherBetter());
+                sum += condition.weight() * sub;
                 weightSum += condition.weight();
             }
             // 保留 1 位小数（与页面展示一致）：避免同分因浮点末位差被拆开
@@ -336,6 +346,17 @@ public class ScreenerService {
                     : Math.round(sum / weightSum * 1000.0) / 10.0));
         }
         return scored;
+    }
+
+    /** 区间子分（WI-014）：区间内 1，区间外按两侧容差线性衰减，最低 0。 */
+    private double bandScore(double value, ScoringCondition condition) {
+        if (value < condition.bandLow()) {
+            return Math.max(0, 1 - (condition.bandLow() - value) / condition.bandLowTolerance());
+        }
+        if (value > condition.bandHigh()) {
+            return Math.max(0, 1 - (value - condition.bandHigh()) / condition.bandHighTolerance());
+        }
+        return 1;
     }
 
     private boolean satisfies(ScoringCondition condition, double value) {
@@ -436,6 +457,7 @@ public class ScreenerService {
      *
      * @param anyGroup true 表示仅在该行满足条件时参与评分（any 组语义）
      * @param weight   评分权重（1 = 等权；WI-011 显式模式可自定义）
+     * @param band     true 表示区间最优评分（WI-014），用区间参数而非百分位
      */
     private record ScoringCondition(
             String factor,
@@ -444,6 +466,11 @@ public class ScreenerService {
             double threshold,
             boolean higherBetter,
             double weight,
-            boolean anyGroup) {
+            boolean anyGroup,
+            boolean band,
+            Double bandLow,
+            Double bandHigh,
+            Double bandLowTolerance,
+            Double bandHighTolerance) {
     }
 }

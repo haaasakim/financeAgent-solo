@@ -486,6 +486,116 @@ class ScreenerServiceTest {
     }
 
     @Test
+    @DisplayName("WI-014 区间评分：区间内满分，两侧容差独立线性衰减")
+    void bandScoringDecaysBySideTolerance() {
+        ScreenerResult result = screenerService.screen(all(
+                cs("volatility20", CompareOp.LTE, 6, false, null, null),
+                cb("volatility20", CompareOp.LTE, 6, 2, 4, 1, 2)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "000001.SZ", "300750.SZ", "600000.SH", "002594.SZ", "510300.SH", "688981.SH");
+        assertThat(scores(result)).containsExactly(100.0, 100.0, 50.0, 0.0, 0.0, 0.0);
+    }
+
+    @Test
+    @DisplayName("WI-014 区间评分：下限等于上限即理想值，越偏离得分越低")
+    void bandScoringIdealValue() {
+        ScreenerResult result = screenerService.screen(all(
+                cb("volatility20", CompareOp.LTE, 6, 3, 3, 2, 4)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "300750.SZ", "000001.SZ", "600000.SH", "002594.SZ", "510300.SH", "688981.SH");
+        assertThat(scores(result)).containsExactly(75.0, 50.0, 50.0, 25.0, 0.0, 0.0);
+    }
+
+    @Test
+    @DisplayName("WI-014 区间子分与百分位子分按权重混合")
+    void bandScoringMixesWithPercentile() {
+        ScreenerResult result = screenerService.screen(all(
+                cs("return20", CompareOp.GT, 0, true, 3.0, ScoreDirection.HIGHER),
+                cb("volatility20", CompareOp.LTE, 6, 2, 4, 1, 2)), 1);
+
+        assertThat(ids(result)).containsExactly(
+                "300750.SZ", "002594.SZ", "000001.SZ", "510300.SH", "688981.SH");
+        assertThat(scores(result)).containsExactly(81.3, 75.0, 62.5, 18.8, 0.0);
+    }
+
+    @Test
+    @DisplayName("WI-014 区间评分：eq 条件方向已显式，可直接用区间评分")
+    void bandScoringAllowsEq() {
+        ScreenerResult result = screenerService.screen(all(
+                cb("volatility20", CompareOp.EQ, 2, 1, 3, 1, 1)), 1);
+
+        assertThat(ids(result)).containsExactly("000001.SZ");
+        assertThat(scores(result)).containsExactly(100.0);
+    }
+
+    @Test
+    @DisplayName("WI-014 校验：区间参数缺失 / 越界 / 下限大于上限 / 容差非正 / 非区间方向携带")
+    void validationRejectsInvalidBand() {
+        assertThatThrownBy(() -> screenerService.screen(all(
+                new Condition("volatility20", CompareOp.LTE, 6.0, true, 1.0,
+                        ScoreDirection.BAND, 2.0, null, 1.0, 1.0)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("区间评分需要下限、上限与两侧容差");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cb("volatility20", CompareOp.LTE, 6, 4, 2, 1, 1)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("区间下限不能大于上限");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cb("volatility20", CompareOp.LTE, 6, 2, 4, 0, 1)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("区间容差必须大于 0");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                new Condition("volatility20", CompareOp.LTE, 6.0, true, 1.0,
+                        ScoreDirection.HIGHER, 2.0, 4.0, 1.0, 1.0)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("非区间评分不能设置区间参数");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                new Condition("volatility20", CompareOp.LTE, 6.0, false, null, null,
+                        2.0, 4.0, 1.0, 1.0)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("只有参与评分的条件才能设置");
+        assertThatThrownBy(() -> screenerService.screen(all(
+                cb("aboveMa60", CompareOp.EQ, 1, 0, 1, 1, 1)), 1))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不支持参与评分");
+    }
+
+    @Test
+    @DisplayName("WI-014 回看：区间评分与页面筛选共用同一排序口径")
+    void bandScoringSharedWithLookBack() {
+        LocalDate history = TRADE_DATE.minusDays(300);
+        seedHistory(history);
+        ScreenerDsl dsl = all(cb("return60", CompareOp.GT, -100, 0, 100, 50, 50));
+
+        ScreenerResult page = screenerService.screenAt(dsl, history, 1);
+        List<String> lookback = screenerService.evaluateAt(dsl, history, 10).stream()
+                .map(ScreenerRow::instrumentId)
+                .toList();
+
+        assertThat(lookback).isEqualTo(ids(page));
+        assertThat(lookback).containsExactly("000001.SZ", "600000.SH");
+        assertThat(scores(page)).containsExactly(100.0, 80.0);
+    }
+
+    @Test
+    @DisplayName("WI-014 解析：区间字段 JSON 往返一致，旧条件不输出区间字段")
+    void parsesBandCondition() {
+        ScreenerDsl dsl = all(cb("volumeRatio20", CompareOp.GTE, 1.2, 1.2, 2.0, 0.5, 0.4));
+        assertThat(screenerService.parse(screenerService.toJson(dsl))).isEqualTo(dsl);
+        assertThat(screenerService.toJson(dsl))
+                .contains("\"direction\":\"band\"")
+                .contains("\"bandLow\":1.2")
+                .contains("\"bandHigh\":2.0")
+                .contains("\"bandLowTolerance\":0.5")
+                .contains("\"bandHighTolerance\":0.4");
+
+        ScreenerDsl legacy = all(c("return20", CompareOp.GT, 0));
+        assertThat(screenerService.toJson(legacy)).doesNotContain("band");
+    }
+
+    @Test
     @DisplayName("WI-011 解析：显式评分字段 JSON 往返一致；非法方向按格式错误拒绝")
     void parseExplicitScoringAndRejectsUnknownDirection() {
         ScreenerDsl dsl = all(cs("return20", CompareOp.GT, 0, true, 2.0, ScoreDirection.HIGHER));
@@ -510,6 +620,12 @@ class ScreenerServiceTest {
     private Condition cs(String factor, CompareOp op, double value, boolean score,
                          Double weight, ScoreDirection direction) {
         return new Condition(factor, op, value, score, weight, direction);
+    }
+
+    private Condition cb(String factor, CompareOp op, double value, double low, double high,
+                         double toleranceLow, double toleranceHigh) {
+        return new Condition(factor, op, value, true, 1.0, ScoreDirection.BAND,
+                low, high, toleranceLow, toleranceHigh);
     }
 
     private ScreenerDsl all(Condition... conditions) {
