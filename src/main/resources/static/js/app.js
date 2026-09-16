@@ -225,7 +225,7 @@
 
     var primary = cssVar('--primary') || '#185FA5';
     var text3 = cssVar('--text-3') || '#888780';
-    var risk = cssVar('--risk') || '#C2413A';
+    var down = cssVar('--down') || '#1D9E75';
     var grid = cssVar('--border') || '#E5E5E1';
 
     charts.btNav = echarts.init(el);
@@ -280,8 +280,8 @@
         series: [
           {
             name: '回撤', type: 'line', data: data.drawdown, symbol: 'none',
-            lineStyle: { width: 1, color: risk },
-            areaStyle: { color: risk, opacity: 0.12 }
+            lineStyle: { width: 1, color: down },
+            areaStyle: { color: down, opacity: 0.12 }
           }
         ]
       });

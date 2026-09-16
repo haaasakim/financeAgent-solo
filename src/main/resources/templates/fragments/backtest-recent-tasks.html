@@ -105,14 +105,15 @@
                         </span>
                     </td>
                     <td class="num"
-                        th:classappend="${t.task.cumulativeReturn != null} ? (${t.task.cumulativeReturn > 0} ? 'up' : (${t.task.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
-                        th:text="${t.task.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.task.cumulativeReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                        th:classappend="${t.task.status == 'SUCCESS' and t.task.cumulativeReturn != null} ? (${t.task.cumulativeReturn > 0} ? 'up' : (${t.task.cumulativeReturn < 0} ? 'down' : 'flat')) : ''"
+                        th:text="${t.task.status == 'SUCCESS' and t.task.cumulativeReturn != null} ? ${#numbers.formatDecimal(t.task.cumulativeReturn * 100, 1, 2) + '%'} : '--'"
+                        th:title="${t.task.status == 'FAILED'} ? ${t.task.message} : null">--</td>
                     <td class="num"
-                        th:text="${t.task.annualReturn != null} ? ${#numbers.formatDecimal(t.task.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
-                    <td class="num risk"
-                        th:text="${t.task.maxDrawdown != null} ? ${#numbers.formatDecimal(t.task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
+                        th:text="${t.task.status == 'SUCCESS' and t.task.annualReturn != null} ? ${#numbers.formatDecimal(t.task.annualReturn * 100, 1, 2) + '%'} : '--'">--</td>
+                    <td class="num" th:classappend="${t.task.status == 'SUCCESS'} ? 'down' : ''"
+                        th:text="${t.task.status == 'SUCCESS' and t.task.maxDrawdown != null} ? ${#numbers.formatDecimal(t.task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</td>
                     <td class="num"
-                        th:text="${t.task.sharpe != null} ? ${#numbers.formatDecimal(t.task.sharpe, 1, 2)} : '--'">--</td>
+                        th:text="${t.task.status == 'SUCCESS' and t.task.sharpe != null} ? ${#numbers.formatDecimal(t.task.sharpe, 1, 2)} : '--'">--</td>
                     <td class="card-sub" th:text="${t.task.createdAt}">--</td>
                     <td>
                         <a class="btn btn-sm" th:if="${t.task.status == 'SUCCESS'}"

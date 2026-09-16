@@ -235,6 +235,33 @@ class BacktestControllerTest {
     }
 
     @Test
+    @DisplayName("失败回测：历史绩效快照不展示且不参与指标排名")
+    void hidesStaleMetricsOfFailedTask() throws Exception {
+        long strategyId = saveStrategy();
+        long successId = insertTask(successParams(strategyId), 0.10, -0.20);
+        long failedId = insertTask(successParams(strategyId), 9.99, -0.90);
+        backtestTaskMapper.markFailed(failedId, "结果作废：存在失真价格假成交", "2026-09-13T00:02");
+
+        String html = mockMvc.perform(get("/fragments/backtest/tasks")
+                        .param("sort", "cumulativeReturn").param("dir", "desc"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(not(containsString("999.00%"))))
+                .andExpect(content().string(containsString("10.00%")))
+                .andExpect(content().string(containsString("结果作废：存在失真价格假成交")))
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(html.indexOf(">" + successId + "<"))
+                .isLessThan(html.indexOf(">" + failedId + "<"));
+
+        mockMvc.perform(get("/backtest").param("taskId", String.valueOf(failedId)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("id=\"bt-failed\"")))
+                .andExpect(content().string(containsString("结果作废：存在失真价格假成交")))
+                .andExpect(content().string(not(containsString("id=\"bt-progress\""))))
+                .andExpect(content().string(not(containsString("回测运行中"))));
+    }
+
+    @Test
     @DisplayName("回测记录分页：每页 20 条，第二页返回剩余记录")
     void pagesAllTasks() throws Exception {
         long strategyId = saveStrategy();

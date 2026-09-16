@@ -21,7 +21,7 @@
         </div>
         <div class="metric">
             <div class="metric-label">最大回撤</div>
-            <div class="metric-val risk"
+            <div class="metric-val down"
                  th:text="${task.maxDrawdown != null} ? ${#numbers.formatDecimal(task.maxDrawdown * 100, 1, 2) + '%'} : '--'">--</div>
         </div>
         <div class="metric">

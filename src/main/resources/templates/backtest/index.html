@@ -116,10 +116,12 @@
     <div id="bt-run-area" aria-live="polite">
         <div th:if="${loadError != null}" class="notice" th:text="${loadError}">--</div>
         <div th:if="${currentTask != null}">
-            <div th:if="${currentTask.status == 'FAILED'}"
-                 th:replace="~{fragments/backtest-failed :: failed}"></div>
-            <div th:unless="${currentTask.status == 'FAILED'}"
-                 th:replace="~{fragments/backtest-progress :: progress}"></div>
+            <th:block th:if="${currentTask.status == 'FAILED'}">
+                <div th:replace="~{fragments/backtest-failed :: failed}"></div>
+            </th:block>
+            <th:block th:unless="${currentTask.status == 'FAILED'}">
+                <div th:replace="~{fragments/backtest-progress :: progress}"></div>
+            </th:block>
         </div>
         <div th:if="${result != null}">
             <div th:replace="~{fragments/backtest-result :: result}"></div>

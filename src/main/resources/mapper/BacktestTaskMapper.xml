@@ -49,10 +49,20 @@
         SELECT * FROM backtest_task WHERE id = #{id}
     </select>
 
-    <!-- 排序列与方向由服务层白名单枚举映射，空值（未完成的指标）恒排最后 -->
+    <!-- 排序列与方向由服务层白名单枚举映射；指标排序仅认可成功任务，失败任务的历史快照不参与排名。 -->
     <select id="findPage" resultMap="BacktestTaskMap">
         SELECT * FROM backtest_task
-        ORDER BY (${sortColumn} IS NULL) ASC, ${sortColumn} ${direction}, id DESC
+        ORDER BY
+        <choose>
+            <when test="sortColumn == 'id'">
+                id ${direction}
+            </when>
+            <otherwise>
+                (CASE WHEN status = 'SUCCESS' THEN ${sortColumn} END IS NULL) ASC,
+                CASE WHEN status = 'SUCCESS' THEN ${sortColumn} END ${direction},
+                id DESC
+            </otherwise>
+        </choose>
         LIMIT #{limit} OFFSET #{offset}
     </select>
 
