@@ -43,7 +43,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # ---------------------------------------------------------------------------
 
 
-def cond(factor, op, value, score=None, weight=None, direction=None):
+def cond(factor, op, value, score=None, weight=None, direction=None,
+         band_low=None, band_high=None, band_low_tolerance=None, band_high_tolerance=None):
     item = {"factor": factor, "op": op, "value": value}
     if score is not None:
         item["score"] = score
@@ -51,6 +52,14 @@ def cond(factor, op, value, score=None, weight=None, direction=None):
         item["weight"] = weight
     if direction is not None:
         item["direction"] = direction
+    if band_low is not None:
+        item["bandLow"] = band_low
+    if band_high is not None:
+        item["bandHigh"] = band_high
+    if band_low_tolerance is not None:
+        item["bandLowTolerance"] = band_low_tolerance
+    if band_high_tolerance is not None:
+        item["bandHighTolerance"] = band_high_tolerance
     return item
 
 
@@ -84,25 +93,29 @@ STRATEGIES = [
     },
     {
         "name": "候选-温和放量新高",
-        "description": "创 60 日新高+温和放量（1.2~3 倍）+不追高（乖离≤15%）；低频使用",
+        "description": "创 60 日新高+温和放量（1.2~3 倍）+不追高（乖离≤15%），仅股票；评分：量比区间 1.2~2 权重 2 + 低乖离权重 1；低频使用",
         "dsl": {"all": [
+            cond("stockOnly", "eq", 1),
             cond("newHigh60", "eq", 1),
-            cond("volumeRatio20", "gte", 1.2, True, 1, "higher"),
+            cond("volumeRatio20", "gte", 1.2, True, 2, "band",
+                 band_low=1.2, band_high=2.0, band_low_tolerance=1.0, band_high_tolerance=1.0),
             cond("volumeRatio20", "lte", 3, False),
-            cond("bias20", "lte", 15, False),
+            cond("bias20", "lte", 15, True, 1, "lower"),
             cond("ma5GtMa10GtMa20", "eq", 1),
-            cond("return60", "gt", 0, True, 1, "higher"),
+            cond("return60", "gt", 0, False),
         ], "any": [], "not": []},
     },
     {
         "name": "候选-趋势回踩",
-        "description": "上升趋势（return20>0、多头排列）中买低乖离回踩点；评分：return60 1 : 低乖离 1",
+        "description": "仅股票；上升趋势（return20>0、多头排列）中买 MA20 附近回踩点；评分：乖离区间 -2~4% 权重 2 : 下行波动低 权重 1；不追高",
         "dsl": {"all": [
+            cond("stockOnly", "eq", 1),
             cond("return20", "gt", 0, False),
             cond("ma5GtMa10GtMa20", "eq", 1),
-            cond("bias20", "lte", 5, True, 1, "lower"),
-            cond("return60", "gt", 0, True, 1, "higher"),
-            cond("downsideVol20", "lte", 3, False),
+            cond("bias20", "lte", 5, True, 2, "band",
+                 band_low=-2, band_high=4, band_low_tolerance=5.0, band_high_tolerance=5.0),
+            cond("return60", "gt", 0, False),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
         ], "any": [], "not": []},
     },
 ]

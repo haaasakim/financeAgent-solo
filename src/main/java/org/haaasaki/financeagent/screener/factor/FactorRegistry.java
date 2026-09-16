@@ -43,6 +43,10 @@ public class FactorRegistry {
                         "CASE WHEN i.name LIKE '%ST%' THEN 0 ELSE 1 END",
                         "CASE WHEN i.name LIKE '%ST%' THEN 0 ELSE 1 END",
                         "", true),
+                new FactorDefinition("stockOnly", "基础", "仅股票", FactorKind.BOOLEAN,
+                        "CASE WHEN i.instrument_type = 'STOCK' THEN 1 ELSE 0 END",
+                        "CASE WHEN i.instrument_type = 'STOCK' THEN 1 ELSE 0 END",
+                        "", true),
                 new FactorDefinition("tradable", "基础", "非停牌（最近在交易）", FactorKind.BOOLEAN,
                         "CASE WHEN (SELECT MAX(d.trade_date) FROM daily_bar d"
                                 + " WHERE d.instrument_id = i.instrument_id)"

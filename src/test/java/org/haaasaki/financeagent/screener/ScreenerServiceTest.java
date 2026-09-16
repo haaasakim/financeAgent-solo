@@ -351,6 +351,20 @@ class ScreenerServiceTest {
     }
 
     @Test
+    @DisplayName("基础因子：仅股票排除 ETF，页面与历史截面口径一致")
+    void stockOnlyExcludesEtf() {
+        ScreenerResult result = screenerService.screen(all(c("stockOnly", CompareOp.EQ, 1)), 1);
+        assertThat(ids(result)).containsExactly(
+                "000001.SZ", "002594.SZ", "300750.SZ", "600000.SH", "600519.SH", "688981.SH");
+
+        LocalDate history = TRADE_DATE.minusDays(300);
+        seedHistory(history);
+        assertThat(screenerService.evaluateAt(all(c("stockOnly", CompareOp.EQ, 1)), history, 10))
+                .extracting(ScreenerRow::instrumentId)
+                .containsExactly("000001.SZ", "600000.SH");
+    }
+
+    @Test
     @DisplayName("策略保存：同名视为覆盖更新，加载与删除正常")
     void savesAndLoadsStrategy() {
         String dslJson = screenerService.toJson(all(c("peTtm", CompareOp.LTE, 30)));
