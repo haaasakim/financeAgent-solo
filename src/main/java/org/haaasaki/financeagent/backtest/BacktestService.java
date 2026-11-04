@@ -258,14 +258,29 @@ public class BacktestService {
         });
     }
 
-    /** 回测记录分页视图：全部任务，可按编号 / 收益 / 回撤 / 夏普排序。 */
+    /** 回测记录分页视图：按筛选条件分页，并可按编号 / 收益 / 回撤 / 夏普排序。 */
     public BacktestTaskView recentTasks(int page, BacktestTaskSort sort, boolean desc) {
+        return recentTasks(page, sort, desc, BacktestTaskFilter.EMPTY);
+    }
+
+    /**
+     * 查询回测任务记录。
+     *
+     * @param page 页码，从 1 开始
+     * @param sort 排序字段
+     * @param desc 是否降序
+     * @param filter 策略、频率、区间与绩效筛选条件；收益与回撤范围单位为百分数
+     * @return 符合条件的分页记录
+     */
+    public BacktestTaskView recentTasks(int page, BacktestTaskSort sort, boolean desc,
+                                        BacktestTaskFilter filter) {
         int currentPage = Math.max(1, page);
-        long total = backtestTaskMapper.countAll();
+        BacktestTaskFilter effectiveFilter = filter == null ? BacktestTaskFilter.EMPTY : filter.normalized();
+        long total = backtestTaskMapper.countFiltered(effectiveFilter);
         int offset = (currentPage - 1) * TASK_PAGE_SIZE;
         List<BacktestTaskRow> rows = offset >= total
                 ? List.of()
-                : backtestTaskMapper.findPage(sort.column(), desc ? "DESC" : "ASC",
+                : backtestTaskMapper.findPage(sort.column(), desc ? "DESC" : "ASC", effectiveFilter,
                         TASK_PAGE_SIZE, offset).stream().map(this::toRow).toList();
         return new BacktestTaskView(rows, total, currentPage, TASK_PAGE_SIZE, sort, desc);
     }

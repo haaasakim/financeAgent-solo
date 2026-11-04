@@ -1,12 +1,10 @@
 <!--
-  回测记录：全部任务分页展示（20/页），支持按编号 / 累计收益 / 年化收益 / 最大回撤 / 夏普排序。
+  回测记录按策略、调仓频率、回测区间和绩效范围筛选，并支持排序与分页。
   排序字段来自 BacktestTaskSort 白名单（未知键回退编号降序）；分页与排序通过 HTMX 局部刷新，
   排在指标列为空（排队 / 运行中 / 失败）的任务之后。
 -->
 <div id="bt-tasks" th:fragment="recent" xmlns:th="http://www.thymeleaf.org"
-     hx-include="#bt-task-context" hx-indicator="#bt-task-loading">
-
-    <input id="bt-task-context" type="hidden" name="taskId" th:value="${selectedTaskId}">
+     hx-indicator="#bt-task-loading">
 
     <div class="card" style="margin-top:16px">
         <div class="card-hd">
@@ -17,17 +15,67 @@
             </div>
         </div>
 
-        <div class="pager" style="padding-top:0;padding-bottom:10px">
-            <span th:text="|第 ${taskView.page} / ${taskView.totalPages()} 页|">--</span>
-            <div class="pager-btns">
-                <button class="btn btn-sm" th:disabled="${!taskView.hasPrev()}"
-                        th:hx-get="@{/fragments/backtest/tasks(page=${taskView.page - 1},sort=${taskView.sort().key()},dir=${taskView.desc()} ? 'desc' : 'asc')}"
-                        hx-target="#bt-tasks" hx-swap="outerHTML">上一页</button>
-                <button class="btn btn-sm" th:disabled="${!taskView.hasNext()}"
-                        th:hx-get="@{/fragments/backtest/tasks(page=${taskView.page + 1},sort=${taskView.sort().key()},dir=${taskView.desc()} ? 'desc' : 'asc')}"
-                        hx-target="#bt-tasks" hx-swap="outerHTML">下一页</button>
+        <form id="bt-task-filters" class="bt-task-filters"
+              hx-get="/fragments/backtest/tasks" hx-target="#bt-tasks" hx-swap="outerHTML">
+            <input type="hidden" name="taskId" th:value="${taskFilter.taskId}">
+            <div class="bt-task-filter-grid">
+                <div class="field">
+                    <label for="bt-filter-strategy">策略名称</label>
+                    <input id="bt-filter-strategy" type="text" name="strategyName"
+                           placeholder="输入名称模糊搜索" th:value="${taskFilter.strategyName}">
+                </div>
+                <div class="field">
+                    <label for="bt-filter-frequency">调仓频率</label>
+                    <select id="bt-filter-frequency" name="frequency">
+                        <option value="" th:selected="${taskFilter.frequency == null}">全部频率</option>
+                        <option value="DAILY" th:selected="${taskFilter.frequency == 'DAILY'}">每日</option>
+                        <option value="WEEKLY" th:selected="${taskFilter.frequency == 'WEEKLY'}">每周</option>
+                        <option value="MONTHLY" th:selected="${taskFilter.frequency == 'MONTHLY'}">每月</option>
+                        <option value="QUARTERLY" th:selected="${taskFilter.frequency == 'QUARTERLY'}">每季</option>
+                    </select>
+                </div>
+                <div class="field bt-task-filter-span-2">
+                    <label>回测区间</label>
+                    <div class="bt-filter-range">
+                        <input type="date" name="periodStart" aria-label="回测区间开始日期"
+                               th:value="${taskFilter.periodStart}">
+                        <span>至</span>
+                        <input type="date" name="periodEnd" aria-label="回测区间结束日期"
+                               th:value="${taskFilter.periodEnd}">
+                    </div>
+                    <span class="bt-filter-hint">只显示起止日期都落在所选区间内的回测</span>
+                </div>
+                <div class="field bt-task-filter-span-2">
+                    <label>累计收益范围（%）</label>
+                    <div class="bt-filter-range">
+                        <input type="number" name="cumulativeReturnMinPct" step="0.01"
+                               placeholder="最低" aria-label="累计收益最低百分比"
+                               th:value="${taskFilter.cumulativeReturnMinPct}">
+                        <span>至</span>
+                        <input type="number" name="cumulativeReturnMaxPct" step="0.01"
+                               placeholder="最高" aria-label="累计收益最高百分比"
+                               th:value="${taskFilter.cumulativeReturnMaxPct}">
+                    </div>
+                </div>
+                <div class="field bt-task-filter-span-2">
+                    <label>最大回撤范围（%）</label>
+                    <div class="bt-filter-range">
+                        <input type="number" name="maxDrawdownMinPct" step="0.01"
+                               placeholder="最低" aria-label="最大回撤最低百分比"
+                               th:value="${taskFilter.maxDrawdownMinPct}">
+                        <span>至</span>
+                        <input type="number" name="maxDrawdownMaxPct" step="0.01"
+                               placeholder="最高" aria-label="最大回撤最高百分比"
+                               th:value="${taskFilter.maxDrawdownMaxPct}">
+                    </div>
+                    <span class="bt-filter-hint">回撤值为负数，例如 -30 至 -10</span>
+                </div>
             </div>
-        </div>
+            <div class="bt-task-filter-actions">
+                <button class="btn btn-primary" type="submit">搜索</button>
+                <a class="btn" href="/backtest">重置</a>
+            </div>
+        </form>
 
         <div class="table-scroll">
             <table>
@@ -35,7 +83,7 @@
                 <tr>
                     <th th:classappend="${taskView.isSortedBy('id')} ? 'sorted' : ''">
                         <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='id',dir=${taskView.nextDirection('id')} ? 'desc' : 'asc')}"
-                           hx-target="#bt-tasks" hx-swap="outerHTML">
+                           hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>编号</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('id') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
@@ -49,7 +97,7 @@
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('cumulativeReturn')} ? 'sorted' : ''">
                         <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='cumulativeReturn',dir=${taskView.nextDirection('cumulativeReturn')} ? 'desc' : 'asc')}"
-                           hx-target="#bt-tasks" hx-swap="outerHTML">
+                           hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>累计收益</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('cumulativeReturn') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
@@ -58,7 +106,7 @@
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('annualReturn')} ? 'sorted' : ''">
                         <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='annualReturn',dir=${taskView.nextDirection('annualReturn')} ? 'desc' : 'asc')}"
-                           hx-target="#bt-tasks" hx-swap="outerHTML">
+                           hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>年化收益</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('annualReturn') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
@@ -67,7 +115,7 @@
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('maxDrawdown')} ? 'sorted' : ''">
                         <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='maxDrawdown',dir=${taskView.nextDirection('maxDrawdown')} ? 'desc' : 'asc')}"
-                           hx-target="#bt-tasks" hx-swap="outerHTML">
+                           hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>最大回撤</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('maxDrawdown') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
@@ -76,7 +124,7 @@
                     <th class="num"
                         th:classappend="${taskView.isSortedBy('sharpe')} ? 'sorted' : ''">
                         <button type="button" class="table-sort" th:hx-get="@{/fragments/backtest/tasks(page=1,sort='sharpe',dir=${taskView.nextDirection('sharpe')} ? 'desc' : 'asc')}"
-                           hx-target="#bt-tasks" hx-swap="outerHTML">
+                           hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">
                             <span>夏普</span>
                             <span class="arrow"
                                   th:text="${taskView.isSortedBy('sharpe') ? (taskView.desc() ? '▼' : '▲') : '△▽'}">△▽</span>
@@ -122,6 +170,18 @@
                 </tr>
                 </tbody>
             </table>
+        </div>
+
+        <div class="pager bt-task-pager">
+            <span th:text="|第 ${taskView.page} / ${taskView.totalPages()} 页|">--</span>
+            <div class="pager-btns">
+                <button class="btn btn-sm" th:disabled="${!taskView.hasPrev()}"
+                        th:hx-get="@{/fragments/backtest/tasks(page=${taskView.page - 1},sort=${taskView.sort().key()},dir=${taskView.desc()} ? 'desc' : 'asc')}"
+                        hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">上一页</button>
+                <button class="btn btn-sm" th:disabled="${!taskView.hasNext()}"
+                        th:hx-get="@{/fragments/backtest/tasks(page=${taskView.page + 1},sort=${taskView.sort().key()},dir=${taskView.desc()} ? 'desc' : 'asc')}"
+                        hx-include="#bt-task-filters" hx-target="#bt-tasks" hx-swap="outerHTML">下一页</button>
+            </div>
         </div>
     </div>
 </div>

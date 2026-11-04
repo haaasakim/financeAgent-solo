@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.haaasaki.financeagent.backtest.BacktestRequest;
 import org.haaasaki.financeagent.backtest.BacktestResultView;
 import org.haaasaki.financeagent.backtest.BacktestService;
+import org.haaasaki.financeagent.backtest.BacktestTaskFilter;
 import org.haaasaki.financeagent.backtest.BacktestTaskSort;
 import org.haaasaki.financeagent.backtest.BacktestTaskView;
 import org.haaasaki.financeagent.backtest.RoundTripQuery;
@@ -23,6 +24,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -45,16 +47,19 @@ public class BacktestController {
 
     @GetMapping("/backtest")
     public String page(@RequestParam(required = false) Long strategyId,
-                       @RequestParam(required = false) Long taskId,
                        @RequestParam(defaultValue = "1") int page,
                        @RequestParam(required = false) String sort,
                        @RequestParam(required = false) String dir,
+                       @ModelAttribute("taskFilter") BacktestTaskFilterForm filter,
                        Model model) {
         model.addAttribute("active", "backtest");
         model.addAttribute("strategies", backtestService.strategies());
         model.addAttribute("benchmarks", backtestService.benchmarks());
-        model.addAttribute("taskView", taskView(page, sort, dir));
-        model.addAttribute("selectedTaskId", taskId);
+        BacktestTaskFilterForm normalizedForm = filter.normalized();
+        BacktestTaskFilter effectiveFilter = normalizedForm.toFilter();
+        Long taskId = normalizedForm.taskId();
+        model.addAttribute("taskFilter", normalizedForm);
+        model.addAttribute("taskView", taskView(page, sort, dir, effectiveFilter));
 
         addFormDefaults(model, strategyId);
 
@@ -81,29 +86,46 @@ public class BacktestController {
     public String tasks(@RequestParam(defaultValue = "1") int page,
                         @RequestParam(required = false) String sort,
                         @RequestParam(required = false) String dir,
-                        @RequestParam(required = false) Long taskId,
+        @ModelAttribute("taskFilter") BacktestTaskFilterForm filter,
                         HttpServletResponse response,
-                        Model model) {
-        BacktestTaskView taskView = taskView(page, sort, dir);
+        Model model) {
+        BacktestTaskFilterForm normalizedForm = filter.normalized();
+        BacktestTaskFilter effectiveFilter = normalizedForm.toFilter();
+        BacktestTaskView taskView = taskView(page, sort, dir, effectiveFilter);
         model.addAttribute("taskView", taskView);
-        model.addAttribute("selectedTaskId", taskId);
-        UriComponentsBuilder url = UriComponentsBuilder.fromPath("/backtest");
-        if (taskId != null) {
-            url.queryParam("taskId", taskId);
-        }
-        response.setHeader("HX-Push-Url", url
-                .queryParam("page", taskView.page())
-                .queryParam("sort", taskView.sort().key())
-                .queryParam("dir", taskView.desc() ? "desc" : "asc")
-                .build().encode().toUriString());
+        model.addAttribute("taskFilter", normalizedForm);
+        response.setHeader("HX-Push-Url", taskListUrl(taskView, normalizedForm));
         return "fragments/backtest-recent-tasks";
     }
 
     /** 解析排序参数：未知键回退编号；dir 缺省按降序（最新 / 最高在前）。 */
-    private BacktestTaskView taskView(int page, String sortKey, String dir) {
+    private BacktestTaskView taskView(int page, String sortKey, String dir, BacktestTaskFilter filter) {
         BacktestTaskSort sort = BacktestTaskSort.fromKey(sortKey);
         boolean desc = dir == null || dir.isBlank() || !"asc".equalsIgnoreCase(dir);
-        return backtestService.recentTasks(page, sort, desc);
+        return backtestService.recentTasks(page, sort, desc, filter);
+    }
+
+    private String taskListUrl(BacktestTaskView taskView, BacktestTaskFilterForm filter) {
+        UriComponentsBuilder url = UriComponentsBuilder.fromPath("/backtest")
+                .queryParam("page", taskView.page())
+                .queryParam("sort", taskView.sort().key())
+                .queryParam("dir", taskView.desc() ? "desc" : "asc");
+        addQueryParam(url, "taskId", filter.taskId());
+        addQueryParam(url, "strategyName", filter.strategyName());
+        addQueryParam(url, "frequency", filter.frequency());
+        addQueryParam(url, "periodStart", filter.periodStart());
+        addQueryParam(url, "periodEnd", filter.periodEnd());
+        addQueryParam(url, "cumulativeReturnMinPct", filter.cumulativeReturnMinPct());
+        addQueryParam(url, "cumulativeReturnMaxPct", filter.cumulativeReturnMaxPct());
+        addQueryParam(url, "maxDrawdownMinPct", filter.maxDrawdownMinPct());
+        addQueryParam(url, "maxDrawdownMaxPct", filter.maxDrawdownMaxPct());
+        return url.build().encode().toUriString();
+    }
+
+    private void addQueryParam(UriComponentsBuilder url, String name, Object value) {
+        if (value != null && (!(value instanceof String string) || !string.isBlank())) {
+            url.queryParam(name, value);
+        }
     }
 
     /** 表单默认值：新回测为最近 3 年 / 每日 / Top5 / 100 万 / 默认费率与沪深300。 */

@@ -49,9 +49,42 @@
         SELECT * FROM backtest_task WHERE id = #{id}
     </select>
 
+    <sql id="taskFilterConditions">
+        <where>
+            <if test="filter.strategyName != null and filter.strategyName != ''">
+                AND instr(lower(strategy_name), lower(#{filter.strategyName})) &gt; 0
+            </if>
+            <if test="filter.frequency != null and filter.frequency != ''">
+                AND CASE WHEN json_valid(params_json)
+                    THEN json_extract(params_json, '$.frequency') ELSE NULL END = #{filter.frequency}
+            </if>
+            <if test="filter.periodStart != null">
+                AND CASE WHEN json_valid(params_json)
+                    THEN json_extract(params_json, '$.startDate') ELSE NULL END &gt;= #{filter.periodStart}
+            </if>
+            <if test="filter.periodEnd != null">
+                AND CASE WHEN json_valid(params_json)
+                    THEN json_extract(params_json, '$.endDate') ELSE NULL END &lt;= #{filter.periodEnd}
+            </if>
+            <if test="filter.cumulativeReturnMinPct != null">
+                AND cumulative_return &gt;= #{filter.cumulativeReturnMinPct} / 100.0
+            </if>
+            <if test="filter.cumulativeReturnMaxPct != null">
+                AND cumulative_return &lt;= #{filter.cumulativeReturnMaxPct} / 100.0
+            </if>
+            <if test="filter.maxDrawdownMinPct != null">
+                AND max_drawdown &gt;= #{filter.maxDrawdownMinPct} / 100.0
+            </if>
+            <if test="filter.maxDrawdownMaxPct != null">
+                AND max_drawdown &lt;= #{filter.maxDrawdownMaxPct} / 100.0
+            </if>
+        </where>
+    </sql>
+
     <!-- 排序列与方向由服务层白名单枚举映射；指标排序仅认可成功任务，失败任务的历史快照不参与排名。 -->
     <select id="findPage" resultMap="BacktestTaskMap">
         SELECT * FROM backtest_task
+        <include refid="taskFilterConditions"/>
         ORDER BY
         <choose>
             <when test="sortColumn == 'id'">
@@ -64,6 +97,11 @@
             </otherwise>
         </choose>
         LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countFiltered" resultType="long">
+        SELECT COUNT(*) FROM backtest_task
+        <include refid="taskFilterConditions"/>
     </select>
 
     <select id="countAll" resultType="long">

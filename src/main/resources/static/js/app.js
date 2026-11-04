@@ -13,6 +13,7 @@
     initKline();
     initBacktestCharts();
     bindHistoryBack();
+    bindStrategyDeleteConfirm();
   });
 
   /* HTMX 换入回测结果后重新初始化图表（onLoad 对初始加载不触发，由 DOMContentLoaded 覆盖）。 */
@@ -63,6 +64,17 @@
         if (sameOriginReferrer && window.history.length > 1) {
           event.preventDefault();
           window.history.back();
+        }
+      });
+    });
+  }
+
+  function bindStrategyDeleteConfirm() {
+    document.querySelectorAll('form[data-strategy-delete]').forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        var name = form.dataset.strategyName || '此策略';
+        if (!window.confirm('确认删除策略「' + name + '」？其全部回测记录将一并删除，且不能恢复。')) {
+          event.preventDefault();
         }
       });
     });

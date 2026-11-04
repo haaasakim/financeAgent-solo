@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -411,6 +412,18 @@ public class ScreenerService {
 
     public List<Strategy> listStrategies() {
         return strategyMapper.findAll();
+    }
+
+    /** 策略名包含匹配；与现有列表一致，按最近更新时间排序。 */
+    public List<Strategy> searchStrategies(String keyword) {
+        List<Strategy> strategies = listStrategies();
+        if (keyword == null || keyword.isBlank()) {
+            return strategies;
+        }
+        String normalized = keyword.trim().toLowerCase(Locale.ROOT);
+        return strategies.stream()
+                .filter(strategy -> strategy.name().toLowerCase(Locale.ROOT).contains(normalized))
+                .toList();
     }
 
     public Strategy findStrategy(long id) {

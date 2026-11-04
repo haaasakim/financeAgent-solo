@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout/skeleton :: head('策略')}"></head>
+<body>
+
+<header th:replace="~{layout/skeleton :: nav('strategies')}"></header>
+
+<main class="wrap">
+    <div class="card">
+        <div class="card-hd">
+            <div>
+                <div class="card-title">策略库</div>
+                <div class="card-sub">集中查看和管理已保存的选股策略</div>
+            </div>
+            <a class="btn btn-primary" th:href="@{/screener}">新建策略</a>
+        </div>
+
+        <div class="notice notice-success" th:if="${notice != null}" th:text="${notice}">已删除策略</div>
+        <div class="notice" th:if="${errorMessage != null}" th:text="${errorMessage}">操作失败</div>
+
+        <form class="toolbar strategy-search" method="get" th:action="@{/strategies}">
+            <input type="text" name="keyword" placeholder="按策略名称搜索" aria-label="按策略名称搜索"
+                   th:value="${keyword}">
+            <button class="btn" type="submit">搜索</button>
+            <a class="btn" th:if="${hasKeyword}" th:href="@{/strategies}">清空</a>
+            <span class="card-sub" th:text="|匹配 ${#lists.size(strategies)} 个|">匹配 0 个</span>
+        </form>
+
+        <div class="empty" th:if="${#lists.isEmpty(strategies) and !hasKeyword}">
+            还没有保存策略。去选股页设置条件并保存后，策略会显示在这里。
+        </div>
+        <div class="empty" th:if="${#lists.isEmpty(strategies) and hasKeyword}">
+            没有找到匹配的策略。
+            <a class="name" th:href="@{/strategies}">清空搜索</a>
+        </div>
+
+        <div class="strategy-page-list" th:if="${!#lists.isEmpty(strategies)}">
+            <div class="strategy-item" th:each="s : ${strategies}">
+                <div class="strategy-item-main">
+                    <div class="strategy-item-name" th:text="${s.name}">策略名称</div>
+                    <div class="strategy-item-desc"
+                         th:if="${s.description != null and !s.description.isBlank()}"
+                         th:text="${s.description}"></div>
+                </div>
+                <div class="strategy-item-actions">
+                    <a class="btn btn-sm" th:href="@{/screener(strategyId=${s.id})}">编辑条件</a>
+                    <a class="btn btn-sm" th:href="@{/backtest(strategyId=${s.id})}">回测</a>
+                    <form method="post" data-strategy-delete
+                          th:action="@{/strategies/{id}/delete(id=${s.id})}"
+                          th:attr="data-strategy-name=${s.name}">
+                        <input th:if="${hasKeyword}" type="hidden" name="keyword" th:value="${keyword}">
+                        <button class="btn btn-sm btn-danger-quiet" type="submit">删除</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div th:replace="~{layout/skeleton :: scripts}"></div>
+</body>
+</html>
