@@ -23,11 +23,10 @@
                 <div class="metric-sub" th:text="|前复权 · 日频|"></div>
             </div>
             <div class="metric">
-                <div class="metric-label">已覆盖标的</div>
+                <div class="metric-label">日K覆盖</div>
                 <div class="metric-val" th:text="${#numbers.formatInteger(stats.coveredInstruments, 1, 'COMMA')}">0</div>
                 <div class="metric-sub"
-                     th:if="${stats.instrumentTotal > 0}"
-                     th:text="|覆盖率 ${#numbers.formatDecimal(stats.coveredInstruments * 100.0 / stats.instrumentTotal, 1, 1)}%|">
+                     th:text="|最新交易日 ${#numbers.formatInteger(stats.latestDateCovered, 1, 'COMMA')} 只 · 标的总数 ${#numbers.formatInteger(stats.instrumentTotal, 1, 'COMMA')}|">
                 </div>
             </div>
             <div class="metric">
@@ -37,6 +36,16 @@
                 </div>
                 <div class="metric-sub">交易日 · Asia/Shanghai</div>
             </div>
+        </div>
+
+        <div class="notice notice-warn" style="margin-top:12px"
+             th:if="${stats.instrumentTotal > 0 and stats.latestDateCovered * 100 < stats.instrumentTotal * 90}">
+            <strong>最新交易日截面不完整：</strong>只有
+            <span th:text="${#numbers.formatInteger(stats.latestDateCovered, 1, 'COMMA')}">0</span>
+            只标的有日K（标的共
+            <span th:text="${#numbers.formatInteger(stats.instrumentTotal, 1, 'COMMA')}">0</span>
+            只），选股与回测结果可能只覆盖部分市场。请等待自动同步，或手动执行
+            <code>--sync.daily</code>；历史缺口用 <code>--sync.audit</code> / <code>--sync.backfill</code> 检查。
         </div>
     </div>
 

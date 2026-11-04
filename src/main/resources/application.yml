@@ -39,7 +39,9 @@ finance:
       circuit-breaker-threshold: 5
       cooldown-seconds: 60
     quote:
-      order: [tencent]
+      # 行情源顺序：primary 指定的源优先，另一个自动作为备源
+      primary: eastmoney
+      eastmoney-host: https://push2his.eastmoney.com
       # 日K域名按序回退。实测 ifzq.gtimg.cn 前置腾讯 WAF，
       # 对 Java/Python 客户端持续返回 501（curl 正常），故 web 域优先
       tencent-kline-hosts:
@@ -55,6 +57,15 @@ finance:
     batch-size: 500
     # 快照同步的条数下限：全市场股票 + ETF 正常约 7,200，低于该值视为接口静默降级
     snapshot-min-total: 5000
+    # 覆盖审计：首根日K晚于应有起点超过该天数 → 历史缺口；末根早于最新交易日超过该天数 → 近期无成交（不回填）
+    coverage-start-grace-days: 15
+    coverage-stale-days: 30
+    # 收盘后自动同步：交易日 16:10 执行；应用收盘后启动且当天未同步时会异步补一次
+    schedule:
+      enabled: true
+      cron: "0 10 16 * * MON-FRI"
+      zone: Asia/Shanghai
+      catch-up: true
 
   market:
     # 市场概览条的指数清单，由 --sync.indexes 入库

@@ -38,11 +38,24 @@ open http://localhost:8080
 java -jar target/financeAgent-*.jar --sync.instruments --sync.init=0 --sync.snapshot --sync.indexes --factor.init --valuation.init \
      --spring.main.web-application-type=none
 
-# 之后每天收盘后增量更新（--sync.incremental 成功后会自动衔接一次 --factor.update 与 --valuation.update）
-java -jar target/financeAgent-*.jar --sync.incremental --sync.snapshot --spring.main.web-application-type=none
+# 审计历史覆盖，补齐缺口（覆盖审计只读；backfill 可重复执行）
+java -jar target/financeAgent-*.jar --sync.audit --spring.main.web-application-type=none
+java -jar target/financeAgent-*.jar --sync.backfill=0 --spring.main.web-application-type=none
+
+# 手动执行一次收盘全流程（字典 → 日K → 因子 → 估值 → 快照）
+java -jar target/financeAgent-*.jar --sync.daily --spring.main.web-application-type=none
 ```
 
-M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，用 `--sync.missing` 只补拉没有日K的标的（可重复执行直到缺失为 0）。因子任务可单独触发：`--factor.init` 全量回填，`--factor.update` 增量重算；历史估值同理：`--valuation.init` 回填、`--valuation.update` 增量。
+**收盘自动同步**：应用运行时默认在交易日 16:10（Asia/Shanghai）自动执行 `--sync.daily`
+（`finance.sync.schedule.*` 可调，`enabled=false` 可关闭）。交易日用基准指数当日日K探测，
+休市日跳过；应用在收盘后启动且当天未同步时会异步补一次。应用未运行时不会调度，
+需要外部 `launchd`/`cron` 拉起 jar（后续工作项）。
+
+覆盖审计按「首根日K是否覆盖历史起点、末根是否覆盖最新交易日」判定，区间内部缺口视为停牌；
+`--sync.missing` 只识别完全没有日K的标的，历史缺口请用 `--sync.audit` / `--sync.backfill`。
+完整链路与本次回填记录见 `docs/work-items/WI-017-数据覆盖补齐与自动同步.md`。
+
+M1 的 50 只小样本验证数据可通过 `--sync.init=50` 复现。同步任务均有条数校验与幂等保证，失败整批拒绝并记入 `sync_log`；全量初始化中断或出现失败时，可重复执行 `--sync.backfill` 补齐。因子任务可单独触发：`--factor.init` 全量回填，`--factor.update` 增量重算；历史估值同理：`--valuation.init` 回填、`--valuation.update` 增量。
 
 ## 批量回测脚本
 

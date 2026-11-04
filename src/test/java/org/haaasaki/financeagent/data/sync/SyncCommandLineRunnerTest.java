@@ -17,8 +17,11 @@ class SyncCommandLineRunnerTest {
     private final MarketDataSyncService syncService = mock(MarketDataSyncService.class);
     private final FactorComputeService factorComputeService = mock(FactorComputeService.class);
     private final ValuationSyncService valuationSyncService = mock(ValuationSyncService.class);
+    private final DataCoverageService coverageService = mock(DataCoverageService.class);
+    private final DailySyncService dailySyncService = mock(DailySyncService.class);
     private final SyncCommandLineRunner runner =
-            new SyncCommandLineRunner(syncService, factorComputeService, valuationSyncService);
+            new SyncCommandLineRunner(syncService, factorComputeService, valuationSyncService,
+                    coverageService, dailySyncService);
 
     @Test
     @DisplayName("--sync.incremental 成功后自动触发 FACTOR_UPDATE 与 VALUATION_UPDATE")
@@ -62,6 +65,31 @@ class SyncCommandLineRunnerTest {
     }
 
     @Test
+    @DisplayName("--sync.audit 只审计；--sync.backfill 按 limit 触发回填")
+    void coverageFlagsTriggerAuditAndBackfill() {
+        given(coverageService.backfill(500))
+                .willReturn(new SyncResult("BACKFILL_DAILY_BARS", "SUCCESS", 500, 480, 20, null));
+
+        runner.run(new DefaultApplicationArguments("--sync.audit"));
+        runner.run(new DefaultApplicationArguments("--sync.backfill=500"));
+
+        verify(coverageService).audit();
+        verify(coverageService).backfill(500);
+        verify(syncService, never()).syncMissingDailyBars();
+    }
+
+    @Test
+    @DisplayName("--sync.daily 触发每日同步编排")
+    void dailyFlagTriggersDailySync() {
+        given(dailySyncService.run())
+                .willReturn(new SyncResult("DAILY_SYNC", "SUCCESS", 5, 5, 0, null));
+
+        runner.run(new DefaultApplicationArguments("--sync.daily"));
+
+        verify(dailySyncService).run();
+    }
+
+    @Test
     @DisplayName("无参数时不执行任何任务")
     void noFlagsDoesNothing() {
         runner.run(new DefaultApplicationArguments());
@@ -71,5 +99,6 @@ class SyncCommandLineRunnerTest {
         verify(factorComputeService, never()).updateFactors();
         verify(valuationSyncService, never()).initializeValuation();
         verify(valuationSyncService, never()).updateValuation();
+        verify(coverageService, never()).audit();
     }
 }

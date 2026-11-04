@@ -35,7 +35,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
     private static final String THIN = "------------------------------------------------------------";
     private static final String SYNC_HINT =
             " 同步命令   : --sync.instruments | --sync.init=N（0 为全量）| --sync.missing（补缺失）\n"
-                    + "              --sync.incremental | --sync.snapshot（快照）| --sync.indexes（指数）\n"
+                    + "              --sync.audit（覆盖审计）| --sync.backfill=N（历史缺口回填）\n"
+                    + "              --sync.daily（收盘全流程）| --sync.incremental | --sync.snapshot\n"
                     + "              --factor.init（因子回填）| --factor.update（因子增量）\n"
                     + "              --valuation.init（估值回填）| --valuation.update（估值增量）";
 
@@ -80,7 +81,8 @@ public class StartupSummaryRunner implements ApplicationRunner {
                 + " 标的字典   : " + format(stats.instrumentTotal()) + " 只"
                 + "（股票 " + format(stats.stockTotal()) + " · ETF " + format(stats.etfTotal()) + "）\n"
                 + " 日K数据    : " + format(stats.dailyBarTotal()) + " 行"
-                + " · 覆盖 " + format(stats.coveredInstruments()) + " 只标的\n"
+                + " · 有数据 " + format(stats.coveredInstruments()) + " 只"
+                + " · 最新交易日 " + format(stats.latestDateCovered()) + " 只\n"
                 + " 日期范围   : " + range(stats) + "\n"
                 + " 最近同步   : " + lastSync(stats) + "\n"
                 + THIN + "\n"

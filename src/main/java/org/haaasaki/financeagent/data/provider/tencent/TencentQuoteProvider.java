@@ -18,7 +18,6 @@ import org.haaasaki.financeagent.data.provider.support.ThrottledHttpClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,7 +43,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  *       本实现按 {@code segment-years} 分段拉取以规避，并对「恰好 640 条」做哨兵检测</li>
  * </ol>
  */
-@Component
 public class TencentQuoteProvider implements QuoteProvider {
 
     private static final Logger log = LoggerFactory.getLogger(TencentQuoteProvider.class);

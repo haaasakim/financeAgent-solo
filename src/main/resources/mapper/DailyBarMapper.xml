@@ -42,6 +42,15 @@
         </constructor>
     </resultMap>
 
+    <resultMap id="InstrumentBarStatsMap" type="org.haaasaki.financeagent.data.model.InstrumentBarStats">
+        <constructor>
+            <idArg column="instrument_id" javaType="java.lang.String"/>
+            <arg column="bar_count" javaType="_long"/>
+            <arg column="first_trade_date" javaType="java.time.LocalDate"/>
+            <arg column="last_trade_date" javaType="java.time.LocalDate"/>
+        </constructor>
+    </resultMap>
+
     <sql id="columns">
         instrument_id, trade_date, open, high, low, close, pre_close, volume,
         amount, pct_chg, turnover_rate, adj_type, source
@@ -128,6 +137,21 @@
         FROM daily_bar
         WHERE instrument_id = #{instrumentId}
         ORDER BY trade_date
+    </select>
+
+    <select id="findAllTradeDates" resultType="java.time.LocalDate">
+        SELECT DISTINCT trade_date
+        FROM daily_bar
+        ORDER BY trade_date
+    </select>
+
+    <select id="findInstrumentBarStats" resultMap="InstrumentBarStatsMap">
+        SELECT instrument_id,
+               COUNT(*)          AS bar_count,
+               MIN(trade_date)   AS first_trade_date,
+               MAX(trade_date)   AS last_trade_date
+        FROM daily_bar
+        GROUP BY instrument_id
     </select>
 
     <select id="findFirstTradeDates" resultMap="InstrumentFirstBarMap">

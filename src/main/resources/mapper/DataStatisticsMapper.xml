@@ -35,6 +35,11 @@
         SELECT COUNT(DISTINCT instrument_id) FROM daily_bar
     </select>
 
+    <select id="countLatestDateCoveredInstruments" resultType="long">
+        SELECT COUNT(*) FROM daily_bar
+        WHERE trade_date = (SELECT MAX(trade_date) FROM daily_bar)
+    </select>
+
     <select id="minTradeDate" resultType="java.time.LocalDate">
         SELECT MIN(trade_date) FROM daily_bar
     </select>

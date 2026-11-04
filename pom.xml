@@ -77,6 +77,16 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <!-- 测试中关闭收盘自动同步，避免在 16:10 之后跑测试时误触发外部同步 -->
+                    <systemPropertyVariables>
+                        <finance.sync.schedule.enabled>false</finance.sync.schedule.enabled>
+                    </systemPropertyVariables>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

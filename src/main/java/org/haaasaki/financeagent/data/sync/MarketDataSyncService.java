@@ -135,6 +135,9 @@ public class MarketDataSyncService {
      *
      * <p>为什么可以按「零行」判定失败：Provider 先取完全部日期分段再返回，
      * 任一分段失败都会让整只标的抛错且不写入，因此失败标的在 daily_bar 中没有任何行。
+     *
+     * <p><b>注意</b>：一旦某个标的有过任意一行（例如增量同步补了最近几天），
+     * 它就不再是「零行」标的；历史缺口要用 {@link #backfillDailyBars(List)} 按覆盖率判定。
      */
     public SyncResult syncMissingDailyBars() {
         List<Instrument> targets = instrumentMapper.findWithoutDailyBars();
@@ -143,6 +146,24 @@ public class MarketDataSyncService {
             return new SyncResult("SYNC_MISSING_BARS", "SUCCESS", 0, 0, 0, "无缺失标的");
         }
         return syncDailyBars(targets, "SYNC_MISSING_BARS");
+    }
+
+    /**
+     * 按覆盖率审计给出的缺口标的做历史回填。
+     *
+     * <p>与 {@link #syncMissingDailyBars()} 的区别：这里不要求标的是「零行」，
+     * 只要覆盖审计判定历史不足就会整段重拉。写入仍走 upsert，不删除既有行：
+     * 拉取失败时只会保留旧数据，不会把已有历史拉空。
+     *
+     * @param targets 缺口标的；为空时直接返回成功
+     */
+    public SyncResult backfillDailyBars(List<Instrument> targets) {
+        if (targets == null || targets.isEmpty()) {
+            log.info("历史回填：没有需要回填的标的");
+            return new SyncResult("BACKFILL_DAILY_BARS", "SUCCESS", 0, 0, 0, "无覆盖缺口");
+        }
+        log.info("历史回填：开始处理 {} 只标的（整段重拉 + upsert 覆写）", targets.size());
+        return syncDailyBars(targets, "BACKFILL_DAILY_BARS");
     }
 
     private SyncResult syncDailyBars(List<Instrument> targets, String taskName) {

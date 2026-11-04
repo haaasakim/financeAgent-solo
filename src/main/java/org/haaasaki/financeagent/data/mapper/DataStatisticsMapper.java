@@ -22,6 +22,9 @@ public interface DataStatisticsMapper {
 
     long countCoveredInstruments();
 
+    /** 最新交易日有日K的标的数；用于发现同步未完成导致的截面不完整。 */
+    long countLatestDateCoveredInstruments();
+
     LocalDate minTradeDate();
 
     LocalDate maxTradeDate();

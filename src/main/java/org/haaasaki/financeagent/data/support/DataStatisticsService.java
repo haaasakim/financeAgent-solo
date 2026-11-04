@@ -29,6 +29,7 @@ public class DataStatisticsService {
                 mapper.countInstrumentsByType(Instrument.TYPE_ETF),
                 mapper.countDailyBars(),
                 mapper.countCoveredInstruments(),
+                mapper.countLatestDateCoveredInstruments(),
                 mapper.minTradeDate(),
                 mapper.maxTradeDate(),
                 last == null ? null : last.taskName(),

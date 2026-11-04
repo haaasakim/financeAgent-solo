@@ -11,7 +11,8 @@ import java.time.LocalDate;
  * @param stockTotal          股票数
  * @param etfTotal            ETF 数
  * @param dailyBarTotal       日K总行数
- * @param coveredInstruments  已有日K数据的标的数（与标的总数的比值即「覆盖率」）
+ * @param coveredInstruments  有过任意日K的标的数（不能代表历史覆盖是否完整）
+ * @param latestDateCovered  最新交易日有日K的标的数；用于发现「截面不完整」
  * @param minTradeDate        全库最早的交易日；无数据时为 null
  * @param maxTradeDate        全库最晚的交易日；无数据时为 null
  * @param lastSyncTask        最近一次同步的任务名；从未同步过时为 null
@@ -24,6 +25,7 @@ public record DataStatistics(
         long etfTotal,
         long dailyBarTotal,
         long coveredInstruments,
+        long latestDateCovered,
         LocalDate minTradeDate,
         LocalDate maxTradeDate,
         String lastSyncTask,

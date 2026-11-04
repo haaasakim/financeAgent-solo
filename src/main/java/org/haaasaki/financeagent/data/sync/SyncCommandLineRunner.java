@@ -19,6 +19,9 @@ import org.springframework.stereotype.Component;
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.init=0 --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.incremental --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.missing --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.audit --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.backfill=500 --spring.main.web-application-type=none"
+ * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.daily --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.snapshot --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--sync.indexes --spring.main.web-application-type=none"
  * ./mvnw spring-boot:run -Dspring-boot.run.arguments="--factor.init --spring.main.web-application-type=none"
@@ -28,6 +31,9 @@ import org.springframework.stereotype.Component;
  * </pre>
  *
  * <p>{@code --sync.init=N} 中 N 表示最多处理 N 只标的（小样本验证用），0 或省略值表示全量。
+ * {@code --sync.audit} 只审计日K覆盖（不写库、不发外部请求）；
+ * {@code --sync.backfill=N} 对审计出的历史缺口整段回填，N 为本轮上限（0 表示不限）；
+ * {@code --sync.daily} 执行每日全流程（字典 → 日K → 因子 → 估值 → 快照），供定时任务与外部调度使用；
  * {@code --sync.snapshot} 同步全市场快照，{@code --sync.indexes} 同步配置中的指数。
  * {@code --factor.init} 全量回填因子，{@code --factor.update} 增量重算；
  * {@code --valuation.init} 全量回填历史估值，{@code --valuation.update} 增量更新；
@@ -45,13 +51,19 @@ public class SyncCommandLineRunner implements ApplicationRunner {
     private final MarketDataSyncService syncService;
     private final FactorComputeService factorComputeService;
     private final ValuationSyncService valuationSyncService;
+    private final DataCoverageService coverageService;
+    private final DailySyncService dailySyncService;
 
     public SyncCommandLineRunner(MarketDataSyncService syncService,
                                  FactorComputeService factorComputeService,
-                                 ValuationSyncService valuationSyncService) {
+                                 ValuationSyncService valuationSyncService,
+                                 DataCoverageService coverageService,
+                                 DailySyncService dailySyncService) {
         this.syncService = syncService;
         this.factorComputeService = factorComputeService;
         this.valuationSyncService = valuationSyncService;
+        this.coverageService = coverageService;
+        this.dailySyncService = dailySyncService;
     }
 
     @Override
@@ -74,9 +86,22 @@ public class SyncCommandLineRunner implements ApplicationRunner {
             log.info("自动衔接：增量同步后更新估值");
             report(valuationSyncService.updateValuation());
         }
+        if (args.containsOption("sync.daily")) {
+            log.info("命令行触发：每日同步（字典 → 日K → 因子 → 估值 → 快照）");
+            report(dailySyncService.run());
+        }
         if (args.containsOption("sync.missing")) {
             log.info("命令行触发：补拉缺失标的的日K");
             report(syncService.syncMissingDailyBars());
+        }
+        if (args.containsOption("sync.audit")) {
+            log.info("命令行触发：审计日K覆盖");
+            coverageService.audit();
+        }
+        if (args.containsOption("sync.backfill")) {
+            int limit = intOption(args, "sync.backfill", 0);
+            log.info("命令行触发：回填历史日K缺口（单轮上限={}，0 表示不限）", limit);
+            report(coverageService.backfill(limit));
         }
         if (args.containsOption("sync.snapshot")) {
             log.info("命令行触发：同步市场快照");
