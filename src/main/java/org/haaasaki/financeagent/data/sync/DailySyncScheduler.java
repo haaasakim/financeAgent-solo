@@ -53,12 +53,14 @@ public class DailySyncScheduler {
                               QuoteProvider quoteProvider,
                               DataStatisticsService statisticsService,
                               @Value("${finance.sync.schedule.zone:Asia/Shanghai}") String zone,
-                              @Value("${finance.sync.schedule.catch-up:true}") boolean catchUpEnabled) {
+                              @Value("${finance.sync.schedule.catch-up:true}") boolean catchUpEnabled,
+                              @Value("${finance.sync.schedule.cron:0 10 16 * * MON-FRI}") String cron) {
         this.dailySyncService = dailySyncService;
         this.quoteProvider = quoteProvider;
         this.statisticsService = statisticsService;
         this.zone = zone;
         this.catchUpEnabled = catchUpEnabled;
+        log.info("收盘自动同步已启用：cron={}，zone={}，catch-up={}", cron, zone, catchUpEnabled);
     }
 
     @Scheduled(cron = "${finance.sync.schedule.cron:0 10 16 * * MON-FRI}",

@@ -27,7 +27,8 @@ class DailySyncSchedulerTest {
     private final QuoteProvider quoteProvider = mock(QuoteProvider.class);
     private final DataStatisticsService statisticsService = mock(DataStatisticsService.class);
     private final DailySyncScheduler scheduler = new DailySyncScheduler(
-            dailySyncService, quoteProvider, statisticsService, "Asia/Shanghai", false);
+            dailySyncService, quoteProvider, statisticsService, "Asia/Shanghai", false,
+            "0 10 16 * * MON-FRI");
 
     @BeforeEach
     void setUp() {
