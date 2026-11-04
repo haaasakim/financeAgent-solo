@@ -8,8 +8,8 @@
 
 用法示例：
   python3 script/batch_backtest.py                      # 全量跑默认矩阵
-  python3 script/batch_backtest.py --only 缩量超跌       # 只跑名称包含该子串的策略
-  python3 script/batch_backtest.py --windows BEAR        # 只跑熊市区间
+  python3 script/batch_backtest.py --only 低估           # 只跑名称包含该子串的策略
+  python3 script/batch_backtest.py --windows HISTORICAL  # 只跑 2018-01-02~2024-01-01
   python3 script/batch_backtest.py --freqs DAILY         # 只跑指定频率
   python3 script/batch_backtest.py --report              # 仅用已有状态文件出报表
   python3 script/batch_backtest.py --create-only         # 只创建/更新策略，不跑回测
@@ -65,74 +65,805 @@ def cond(factor, op, value, score=None, weight=None, direction=None,
 
 STRATEGIES = [
     {
-        "name": "候选-缩量超跌",
-        "description": "超跌+缩量（抛压衰竭）+低下行波动；评分：深跌度 2 : 缩量 1",
+        "name": "实验-趋势新高",
+        "description": "股票、非 ST、上市满 250 日；60/120 日新高且中期为正，限制波动；覆盖趋势、基础、风险、量能因子",
         "dsl": {"all": [
-            cond("pctFrom52wHigh", "lte", -30, True, 2, "lower"),
-            cond("volChg20", "lte", 0, True, 1, "lower"),
-            cond("downsideVol20", "lte", 3, False),
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250),
+            cond("newHigh120", "eq", 1), cond("newHigh60", "eq", 1),
+            cond("return60", "gt", 0), cond("volumeRatio5", "gte", 0.8),
+            cond("volatility20", "lte", 8, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -15, True, 2, "higher"),
         ], "any": [], "not": []},
     },
     {
-        "name": "候选-缩量超跌回稳",
-        "description": "超跌+缩量+站回 MA60（底部右侧确认）；评分：深跌度 1 : 缩量 1",
+        "name": "实验-新高回撤",
+        "description": "新高后的有限回撤，不追逐短期过热；覆盖趋势、风险、量能因子",
         "dsl": {"all": [
-            cond("pctFrom52wHigh", "lte", -30, True, 1, "lower"),
-            cond("volChg20", "lte", 0, True, 1, "lower"),
-            cond("downsideVol20", "lte", 2.5, False),
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("newHigh120", "eq", 1),
+            cond("newHigh60", "eq", 1), cond("return60", "gt", 0),
+            cond("return20", "lte", 12, True, 1, "lower"),
+            cond("bias20", "lte", 8, True, 1, "lower"),
+            cond("downsideVol20", "lte", 6, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-新高低波",
+        "description": "120 日新高与低波动组合，过滤异常振幅；覆盖趋势、风险、量能因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("newHigh120", "eq", 1),
+            cond("pctFrom52wHigh", "gte", -20, True, 2, "higher"),
+            cond("volatility20", "lte", 6, True, 1, "lower"),
+            cond("downsideVol20", "lte", 4, False),
+            cond("amplitude20", "lte", 8, False),
+            cond("volumeRatio20", "lte", 3, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-低估反转",
+        "description": "正 PE/PB 的低估值、短线超卖与回撤组合；覆盖估值、趋势、风险因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("peTtm", "gt", 0),
+            cond("peTtm", "lte", 25, True, 2, "lower"),
+            cond("pb", "gt", 0), cond("pb", "lte", 3, True, 1, "lower"),
+            cond("rsi6", "lte", 45, True, 1, "lower"),
+            cond("bias20", "lte", 0, True, 1, "lower"),
+            cond("downsideVol20", "lte", 6, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-低估低波",
+        "description": "低估值与低波动组合，减少高波动价值陷阱；覆盖估值、风险、基础因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("peTtm", "gt", 0),
+            cond("peTtm", "lte", 20, True, 2, "lower"),
+            cond("pb", "gt", 0), cond("pb", "lte", 2.5, True, 1, "lower"),
+            cond("volatility20", "lte", 6, True, 1, "lower"),
+            cond("downsideVol20", "lte", 4, False),
+            cond("amplitude20", "lte", 8, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-低估趋势",
+        "description": "低估值叠加 MA20/MA60 上方趋势，避免纯粹接下落刀；覆盖估值、趋势、基础因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("peTtm", "gt", 0),
+            cond("peTtm", "lte", 30, True, 2, "lower"),
+            cond("pb", "gt", 0), cond("pb", "lte", 4, True, 1, "lower"),
+            cond("aboveMa60", "eq", 1), cond("ma20GtMa60", "eq", 1),
+            cond("return60", "gt", 0), cond("bias20", "lte", 10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-超卖右侧",
+        "description": "RSI/乖离超卖但仍在长期趋势上方，覆盖反转、趋势、风险因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("rsi6", "lte", 40, True, 1, "lower"),
+            cond("bias20", "lte", -5, True, 2, "lower"),
+            cond("aboveMa60", "eq", 1), cond("return60", "gt", 0),
+            cond("pctFrom52wHigh", "lte", -5, False),
+            cond("downsideVol20", "lte", 5, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-低波防守",
+        "description": "低波动、低下行风险且中期不为负，覆盖风险、趋势、基础因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False), cond("return60", "gt", 0),
             cond("aboveMa60", "eq", 1),
         ], "any": [], "not": []},
     },
     {
-        "name": "候选-深度乖离回归",
-        "description": "偏离 MA60 ≤ -20% + RSI6 ≤ 35 超卖确认；评分：乖离深度 2 : RSI 低 1",
+        "name": "实验-量能衰竭",
+        "description": "缩量、短线超卖与回撤组合，等待抛压衰竭；覆盖量能、反转、风险因子",
         "dsl": {"all": [
-            cond("bias60", "lte", -20, True, 2, "lower"),
-            cond("rsi6", "lte", 35, True, 1, "lower"),
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("volChg20", "lte", 0, True, 1, "lower"),
+            cond("volumeRatio5", "lte", 1.2, False), cond("rsi6", "lte", 45, True, 1, "lower"),
+            cond("bias20", "lte", 0, True, 2, "lower"),
+            cond("pctFrom52wHigh", "lte", -10, False),
+            cond("downsideVol20", "lte", 6, False),
         ], "any": [], "not": []},
     },
     {
-        "name": "候选-温和放量新高",
-        "description": "创 60 日新高+温和放量（1.2~3 倍）+不追高（乖离≤15%），仅股票；评分：量比区间 1.2~2 权重 2 + 低乖离权重 1；低频使用",
+        "name": "实验-量价突破",
+        "description": "60 日新高配合温和放量，限制波动与过度追高；覆盖趋势、量能、风险因子",
         "dsl": {"all": [
-            cond("stockOnly", "eq", 1),
-            cond("newHigh60", "eq", 1),
-            cond("volumeRatio20", "gte", 1.2, True, 2, "band",
-                 band_low=1.2, band_high=2.0, band_low_tolerance=1.0, band_high_tolerance=1.0),
-            cond("volumeRatio20", "lte", 3, False),
-            cond("bias20", "lte", 15, True, 1, "lower"),
-            cond("ma5GtMa10GtMa20", "eq", 1),
-            cond("return60", "gt", 0, False),
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("newHigh60", "eq", 1),
+            cond("volumeRatio5", "gte", 1.2, True, 2, "band",
+                 band_low=1.2, band_high=2.5, band_low_tolerance=1.0, band_high_tolerance=1.0),
+            cond("volumeRatio5", "lte", 3, False), cond("volumeRatio20", "lte", 3, False),
+            cond("return20", "gt", 0), cond("volatility20", "lte", 8, False),
+            cond("pctFrom52wHigh", "gte", -10, True, 1, "higher"),
         ], "any": [], "not": []},
     },
     {
-        "name": "候选-趋势回踩",
-        "description": "仅股票；上升趋势（return20>0、多头排列）中买 MA20 附近回踩点；评分：乖离区间 -2~4% 权重 2 : 下行波动低 权重 1；不追高",
+        "name": "实验-MACD反转",
+        "description": "MACD 柱翻正配合短线回撤与超卖，覆盖趋势、反转、量能因子",
         "dsl": {"all": [
-            cond("stockOnly", "eq", 1),
-            cond("return20", "gt", 0, False),
-            cond("ma5GtMa10GtMa20", "eq", 1),
-            cond("bias20", "lte", 5, True, 2, "band",
-                 band_low=-2, band_high=4, band_low_tolerance=5.0, band_high_tolerance=5.0),
-            cond("return60", "gt", 0, False),
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("macdHist", "gte", 0, True, 1, "higher"),
+            cond("rsi6", "lte", 50, True, 1, "lower"), cond("bias20", "lte", 0, True, 1, "lower"),
+            cond("volumeRatio20", "lte", 2.5, False), cond("downsideVol20", "lte", 6, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-综合多因子",
+        "description": "新高、低估值、低波动综合排序；覆盖基础、估值、趋势、量能、风险因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 1), cond("excludeSt", "eq", 1),
+            cond("listedDays", "gte", 250), cond("newHigh60", "eq", 1),
+            cond("peTtm", "gt", 0), cond("peTtm", "lte", 30, True, 2, "lower"),
+            cond("pb", "gt", 0), cond("pb", "lte", 4, True, 1, "lower"),
+            cond("volatility20", "lte", 8, True, 1, "lower"),
+            cond("volumeRatio5", "gte", 0.8, False),
+            cond("pctFrom52wHigh", "gte", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波",
+        "description": "不限定股票/ETF，使用上市年限、低波动与低下行风险筛选；检验跨品种低波组合",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
             cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
         ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波-止损3",
+        "description": "全市场低波策略的独立 3% 固定止损复核变体；手续费不变",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波-时间止损10",
+        "description": "全市场低波策略的独立 10 个交易日未盈利退出变体；手续费不变",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场纯低波",
+        "description": "不限定股票/ETF，只按低波动、低下行风险和低振幅排序；作为低波基线，减少额外择时条件",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波宽松",
+        "description": "不限定股票/ETF，放宽波动阈值但保留低下行风险与距高点约束；测试低波策略容量",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+            cond("pctFrom52wHigh", "gte", -20, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波回撤",
+        "description": "低波动池叠加距 52 周高点至少 5% 的回撤，并按回撤深度评分；基于分段因子研究复核反转方向",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+            cond("pctFrom52wHigh", "lte", -5, True, 2, "lower"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波区间",
+        "description": "低波动池中只取距 52 周高点约 -20%~-5% 的中等回撤，使用区间评分减少极端值影响",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+            cond("pctFrom52wHigh", "gte", -30, False),
+            cond("pctFrom52wHigh", "lte", -5, True, 2, "band",
+                 band_low=-20, band_high=-5, band_low_tolerance=10, band_high_tolerance=5),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波双状态",
+        "description": "低波动底层池中允许 120 日新高或中等回撤任一状态，通过截面评分在两类资产间切换",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+        ], "any": [
+            cond("newHigh120", "eq", 1),
+            cond("pctFrom52wHigh", "lte", -5, True, 2, "band",
+                 band_low=-20, band_high=-5, band_low_tolerance=10, band_high_tolerance=5),
+        ], "not": []},
+    },
+    {
+        "name": "实验-全市场低波低RSI",
+        "description": "不限定股票/ETF，低波动组合增加 RSI6 不过热过滤，减少高位债券与拥挤标的",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("rsi6", "lte", 70, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-自适应低波",
+        "description": "低波动底层池中允许新高、超卖或深度回撤任一信号；检验多状态因子组合",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+        ], "any": [
+            cond("newHigh120", "eq", 1),
+            cond("rsi6", "lte", 35, True, 1, "lower"),
+            cond("pctFrom52wHigh", "lte", -20, True, 1, "lower"),
+        ], "not": []},
+    },
+    {
+        "name": "实验-全市场新高低波",
+        "description": "不限定股票/ETF，120 日新高与低波动组合；检验趋势信号跨品种是否稳定",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250), cond("newHigh120", "eq", 1),
+            cond("pctFrom52wHigh", "gte", -20, True, 2, "higher"),
+            cond("volatility20", "lte", 6, True, 1, "lower"),
+            cond("downsideVol20", "lte", 4, False),
+            cond("amplitude20", "lte", 8, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场反转",
+        "description": "不限定股票/ETF，短线超卖与低波动组合；检验均值回归跨品种是否有效",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250), cond("rsi6", "lte", 45, True, 1, "lower"),
+            cond("bias20", "lte", 0, True, 2, "lower"),
+            cond("volatility20", "lte", 6, True, 1, "lower"),
+            cond("downsideVol20", "lte", 4, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场趋势",
+        "description": "不限定股票/ETF，120 日新高、60 日收益为正并限制波动；检验趋势信号跨品种是否有效",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250), cond("newHigh120", "eq", 1),
+            cond("return60", "gt", 0), cond("volatility20", "lte", 8, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -15, True, 2, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-跨市场动量",
+        "description": "不限定股票/ETF，以 20 日和 60 日收益为正、站上 MA20 且限制波动筛选；不依赖新高标签",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("return20", "gt", 3, True, 2, "higher"),
+            cond("return60", "gt", 0, False), cond("aboveMa20", "eq", 1),
+            cond("volumeRatio5", "lte", 3, False),
+            cond("volatility20", "lte", 15, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -20, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-全市场低波上升",
+        "description": "不限定股票/ETF，要求 60 日收益为正且站上 MA60，再叠加低波动；检验低波组合能否避开下跌债券",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250), cond("return60", "gt", 1),
+            cond("aboveMa60", "eq", 1),
+            cond("volatility20", "lte", 8, True, 2, "lower"),
+            cond("downsideVol20", "lte", 5, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF低波",
+        "description": "仅 ETF/非股票标的，低波动与低下行风险；检验 ETF 防守组合",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF低波-止损3",
+        "description": "ETF 低波策略的独立 3% 固定止损复核变体；手续费不变",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF低波-时间止损10",
+        "description": "ETF 低波策略的独立 10 个交易日未盈利退出变体；手续费不变",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF趋势",
+        "description": "仅 ETF/非股票标的，120 日新高、中期收益为正并限制波动；检验 ETF 趋势组合",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("newHigh120", "eq", 1), cond("return60", "gt", 0),
+            cond("volatility20", "lte", 8, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -15, True, 2, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF新高",
+        "description": "仅 ETF/非股票标的，60/120 日新高和温和量能；检验 ETF 突破组合",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("newHigh120", "eq", 1), cond("newHigh60", "eq", 1),
+            cond("volumeRatio20", "lte", 3, False),
+            cond("volatility20", "lte", 8, False),
+            cond("pctFrom52wHigh", "gte", -10, True, 2, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF反转",
+        "description": "仅 ETF/非股票标的，短线超卖和低波动；检验 ETF 均值回归组合",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("rsi6", "lte", 45, True, 1, "lower"),
+            cond("bias20", "lte", 0, True, 2, "lower"),
+            cond("volatility20", "lte", 6, True, 1, "lower"),
+            cond("downsideVol20", "lte", 4, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-ETF现金防守",
+        "description": "仅 ETF/非股票标的，极低波动且靠近 52 周低点，尝试排除近期下跌的中长债；覆盖基础、趋势、风险因子",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 1, True, 2, "lower"),
+            cond("downsideVol20", "lte", 1, True, 1, "lower"),
+            cond("amplitude20", "lte", 1, False),
+            cond("pctFrom52wLow", "lte", 1, False),
+            cond("rsi6", "lte", 60, False),
+            cond("pctFrom52wHigh", "gte", -5, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-复核超跌企稳",
+        "description": "复核已有超跌企稳策略：距 52 周高点较远且近期波动低；按完整两段区间重新验证",
+        "dsl": {"all": [
+            cond("pctFrom52wHigh", "lte", -30, True, 1, "lower"),
+            cond("volatility20", "lte", 3, True, 1, "lower"),
+        ], "any": [], "not": []},
+    },
+    # ------------------------------------------------------------------
+    # G6：稳定性终极测试（目标：A / B / SUB2 三段全为正）
+    # ------------------------------------------------------------------
+    {
+        "name": "实验-G6-浅回撤强趋势",
+        "description": "浅回撤低波池 + bias60 温和区间评分权重 2，强化趋势倾斜",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("bias60", "gt", -15, True, 2, "band",
+                 band_low=-10, band_high=30, band_low_tolerance=10, band_high_tolerance=30),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G6-浅回撤趋势门",
+        "description": "浅回撤低波池 + bias60 > -10% 硬门（低换手慢趋势）",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("bias60", "gt", -10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G6-极浅微趋势",
+        "description": "极浅回撤低波池 + bias60 小区间 [-5, 15] 评分，温和倾斜",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -5, False),
+            cond("bias60", "gt", -10, True, 1, "band",
+                 band_low=-5, band_high=15, band_low_tolerance=10, band_high_tolerance=15),
+        ], "any": [], "not": []},
+    },
+    # ------------------------------------------------------------------
+    # G5：围绕双赢（低波重权 + bias60 软趋势）做最后微调
+    # ------------------------------------------------------------------
+    {
+        "name": "实验-G5-低波超重权",
+        "description": "低波权重加大到 6:3:1，进一步稳定排名、压缩换手",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 6, "lower"),
+            cond("downsideVol20", "lte", 3, True, 3, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G5-低波重权带",
+        "description": "趋势项改为 bias60 区间 [-15, 25]，避免极端强势与深跌两类",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "band",
+                 band_low=-15, band_high=25, band_low_tolerance=15, band_high_tolerance=25),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G5-低波重权窄震",
+        "description": "收紧振幅过滤到 5%，减少波动扩张标的以压缩换手",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 5, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G5-低波重权重回撤",
+        "description": "距高点过滤收紧到 -15%，验证回撤约束对双赢的增益",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -15, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G5-低波重权慢门",
+        "description": "叠加 return60 > -10% 慢趋势门，过滤中期走弱标的",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("return60", "gt", -10, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    # ------------------------------------------------------------------
+    # G4：验证低换手下能否稳住双赢（价值倾斜 / 慢动量 / 重权低波）
+    # ------------------------------------------------------------------
+    {
+        "name": "实验-G4-浅回撤价值",
+        "description": "浅回撤低波池叠加 PE ≤ 25 与 PB ≤ 3 估值过滤（低换手价值倾斜）",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("peTtm", "gt", 0, False),
+            cond("peTtm", "lte", 25, False),
+            cond("pb", "gt", 0, False),
+            cond("pb", "lte", 3, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G4-极浅慢动量",
+        "description": "极浅回撤低波池叠加 return60 慢动量评分（重权低波 4:2:1）",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -5, False),
+            cond("return60", "gt", 0, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G4-极浅趋势门",
+        "description": "极浅回撤低波池叠加 bias60 > -15% 慢趋势门（不评分、低换手）",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -5, False),
+            cond("bias60", "gt", -15, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G4-浅回撤价值趋势",
+        "description": "浅回撤低波池（重权 4:2:1）叠加 PE/PB 过滤与 bias60 软趋势评分",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("peTtm", "gt", 0, False),
+            cond("peTtm", "lte", 25, False),
+            cond("pb", "gt", 0, False),
+            cond("pb", "lte", 3, False),
+            cond("bias60", "gt", -10, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G4-低波重权纯",
+        "description": "仅低波重权（4:2）无趋势项，验证 重权趋势分 的收益是否来自权重本身",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G4-低波重权浅回撤",
+        "description": "低波重权（4:2:1）+ 浅回撤过滤（-10%）+ 软趋势评分，寻找低回撤双赢",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-低波浅回撤趋势分",
+        "description": "浅回撤过滤（-10%）叠加 bias60 软趋势评分，兼顾低换手与趋势倾斜",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-低波极浅回撤",
+        "description": "低波池距高点过滤收紧到 -5%，最大化避开走弱标的",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -5, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-低波浅回撤慢势",
+        "description": "浅回撤过滤叠加 return60 > -10% 慢趋势门（不作为评分，控制换手）",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("return60", "gt", -10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-低波重权趋势分",
+        "description": "提高低波权重（4:2:1）让排名更稳，趋势分降为辅助",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 4, "lower"),
+            cond("downsideVol20", "lte", 3, True, 2, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-低波趋势带",
+        "description": "趋势分改为 bias60 区间 [-10, 30]，偏好温和上行而非极端强势",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "band",
+                 band_low=-10, band_high=30, band_low_tolerance=15, band_high_tolerance=30),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G3-浅回撤趋势带",
+        "description": "浅回撤过滤 + bias60 温和区间评分（[-10, 20]）的组合",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+            cond("bias60", "gt", -15, True, 1, "band",
+                 band_low=-10, band_high=20, band_low_tolerance=15, band_high_tolerance=20),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波纯排名",
+        "description": "低波池去掉距高点评分，减少排名抖动带来的换手；验证低换手低波的 B 段表现",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波趋势分",
+        "description": "低波池用 bias60 作为软性趋势评分（>-15% 且越大越好），减少硬过滤换手",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -25, False),
+            cond("bias60", "gt", -15, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波浅回撤",
+        "description": "低波池收紧距高点过滤到 -10%，试图在 B 段提前剔除走弱的债券类标的",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波慢趋势门",
+        "description": "低波池使用 return60 > -5% 的慢趋势门，比 MA60 更平滑、少抖动",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("return60", "gt", -5, False),
+            cond("pctFrom52wHigh", "gte", -20, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-ETF低波浅回撤",
+        "description": "ETF 低波池收紧距高点过滤到 -10%，验证 B 段债券回撤能否被剔除",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-ETF低波慢趋势",
+        "description": "ETF 低波池叠加 return60 > 0 慢趋势门，验收 ETF 趋势过滤的成本影响",
+        "dsl": {"all": [
+            cond("stockOnly", "eq", 0), cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 5, True, 2, "lower"),
+            cond("downsideVol20", "lte", 3, True, 1, "lower"),
+            cond("amplitude20", "lte", 6, False),
+            cond("return60", "gt", 0, False),
+            cond("pctFrom52wHigh", "gte", -15, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波宽池浅回撤",
+        "description": "放宽低波阈值但收紧距高点过滤，检验容量与成本的平衡",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 10, True, 2, "lower"),
+            cond("downsideVol20", "lte", 6, True, 1, "lower"),
+            cond("amplitude20", "lte", 12, False),
+            cond("pctFrom52wHigh", "gte", -10, False),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波新高门",
+        "description": "低波池要求 120 日新高或站上 MA60 任一状态，验证趋势状态并联是否兼顾两段",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 6, True, 2, "lower"),
+            cond("downsideVol20", "lte", 4, True, 1, "lower"),
+            cond("pctFrom52wHigh", "gte", -20, False),
+        ], "any": [
+            cond("newHigh120", "eq", 1),
+            cond("aboveMa60", "eq", 1),
+        ], "not": []},
+    },
+    {
+        "name": "实验-G2-低波便宜趋势",
+        "description": "低波池叠加低估值过滤，检验价值属性对 B 段收益的贡献",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 6, True, 2, "lower"),
+            cond("downsideVol20", "lte", 4, True, 1, "lower"),
+            cond("peTtm", "gt", 0, False),
+            cond("peTtm", "lte", 20, False),
+            cond("pb", "gt", 0, False),
+            cond("pb", "lte", 2.5, False),
+            cond("pctFrom52wHigh", "gte", -20, True, 1, "higher"),
+        ], "any": [], "not": []},
+    },
+    {
+        "name": "实验-G2-低波双状态估值",
+        "description": "低波低估池（PE ≤ 15 且剔除亏损）中允许接近新高或站上 MA60 任一趋势状态",
+        "dsl": {"all": [
+            cond("listedDays", "gte", 250),
+            cond("volatility20", "lte", 6, True, 2, "lower"),
+            cond("downsideVol20", "lte", 4, True, 1, "lower"),
+            cond("amplitude20", "lte", 8, False),
+            cond("peTtm", "lte", 15, False),
+        ], "any": [
+            cond("pctFrom52wHigh", "gte", -5),
+            cond("aboveMa60", "eq", 1),
+        ], "not": [
+            cond("peTtm", "lte", 0),
+        ]},
     },
 ]
 
 WINDOWS = {
-    "BULL": ("2024-09-01", "2026-09-01"),
-    "BEAR": ("2018-01-02", "2023-12-31"),
+    # 结束日按含义写成 2024-01-01，实际最后一个交易日为 2023-12-29。
+    "HISTORICAL": ("2018-01-02", "2024-01-01"),
+    "RECENT": ("2024-01-02", "2026-09-11"),
+    # 稳健性检查用子区间（仅对最终候选使用）
+    "SUB1": ("2018-01-02", "2020-12-31"),
+    "SUB2": ("2021-01-04", "2023-12-29"),
+    "SUB3": ("2025-01-02", "2026-09-11"),
 }
 
-# 每个策略的调仓频率（动量类策略按建议只用低频）
-FREQUENCIES = {
-    "候选-缩量超跌": ["DAILY", "WEEKLY"],
-    "候选-缩量超跌回稳": ["DAILY", "WEEKLY"],
-    "候选-深度乖离回归": ["DAILY", "WEEKLY"],
-    "候选-温和放量新高": ["WEEKLY", "MONTHLY"],
-    "候选-趋势回踩": ["DAILY", "WEEKLY"],
-}
+# 本轮研究严格按用户要求只比较日频；交易成本保持原项目默认值，不随候选策略调整。
+FREQUENCIES = {strategy["name"]: ["DAILY"] for strategy in STRATEGIES}
 
 BACKTEST_PARAMS = {
     "topN": 5,
@@ -201,6 +932,15 @@ def ensure_strategy(base_url, db_path, name, description, dsl):
     return rows[0]["id"]
 
 
+def delete_strategy(base_url, db_path, strategy_id):
+    """通过项目删除接口清理策略及其回测记录，避免直接改表留下半套数据。"""
+    post(base_url, "/fragments/screener/strategies/%d/delete" % strategy_id, {})
+    if db(db_path, "SELECT id FROM strategy WHERE id = ?", (strategy_id,)):
+        raise RuntimeError("策略删除失败：#%d" % strategy_id)
+    return db(db_path, "SELECT COUNT(*) AS n FROM backtest_task WHERE strategy_id = ?",
+              (strategy_id,))[0]["n"]
+
+
 def submit_task(base_url, strategy_id, start, end, frequency):
     params = dict(BACKTEST_PARAMS)
     params.update({"strategyId": strategy_id, "startDate": start,
@@ -256,7 +996,9 @@ def build_jobs(args):
                 if args.freqs and frequency not in args.freqs:
                     continue
                 jobs.append({
-                    "key": "%s|%s|%s" % (strategy["name"], window, frequency),
+                    "key": "%s|%s|%s|SL%s|TS%s" % (
+                        strategy["name"], window, frequency,
+                        args.stop_loss_pct, args.time_stop_days),
                     "strategy": strategy["name"],
                     "window": window, "start": start, "end": end,
                     "frequency": frequency,
@@ -268,9 +1010,16 @@ def run_all(args):
     state = load_state(args.out)
     state_lock = threading.Lock()
 
+    selected = [strategy for strategy in STRATEGIES
+                if not args.only
+                or any(key in strategy["name"] for key in args.only)]
+    if not selected:
+        log("没有匹配的策略：%s" % ",".join(args.only))
+        return 1
+
     log("创建/更新策略…")
     ids = {}
-    for strategy in STRATEGIES:
+    for strategy in selected:
         ids[strategy["name"]] = ensure_strategy(
             args.base_url, args.db, strategy["name"], strategy["description"], strategy["dsl"])
         log("  策略 #%d %s" % (ids[strategy["name"]], strategy["name"]))
@@ -308,7 +1057,33 @@ def run_all(args):
                 log("异常：%s" % exc)
     save_state(args.out, state)
     report(args)
+    if args.delete_losing:
+        cleanup_losing(args, ids, build_jobs(args))
     return 1 if failed else 0
+
+
+def cleanup_losing(args, ids, jobs):
+    """保留至少一个区间盈利的策略；其余本轮策略通过业务接口删除。"""
+    rows = collect(args)
+    by_strategy = {}
+    for row in rows:
+        by_strategy.setdefault(row["strategy_name"], []).append(row)
+    expected = {}
+    for job in jobs:
+        expected[job["strategy"]] = expected.get(job["strategy"], 0) + 1
+
+    for name, strategy_id in ids.items():
+        result_rows = by_strategy.get(name, [])
+        successful = [row for row in result_rows
+                      if row["status"] == "SUCCESS" and row["cumulative_return"] is not None]
+        profitable = any(row["cumulative_return"] > 0 for row in successful)
+        complete = len(successful) == expected.get(name, 0)
+        if complete and profitable:
+            log("保留策略 #%d %s（至少一个区间盈利）" % (strategy_id, name))
+            continue
+        removed = delete_strategy(args.base_url, args.db, strategy_id)
+        log("删除策略 #%d %s（无完整盈利区间，清理 %d 条回测记录）" %
+            (strategy_id, name, removed))
 
 
 # ---------------------------------------------------------------------------
@@ -386,17 +1161,25 @@ def main():
     parser.add_argument("--out", default=os.path.join(ROOT, "target", "batch-backtest"),
                         help="状态与结果输出目录")
     parser.add_argument("--only", default="", help="只跑名称包含任一子串的策略，逗号分隔")
-    parser.add_argument("--windows", default="BULL,BEAR", help="区间名，逗号分隔（BULL/BEAR）")
+    parser.add_argument("--windows", default="HISTORICAL,RECENT", help="区间名，逗号分隔（HISTORICAL/RECENT）")
     parser.add_argument("--freqs", default="", help="频率过滤，逗号分隔（DAILY/WEEKLY/MONTHLY）")
     parser.add_argument("--concurrency", type=int, default=3, help="回测并发数")
+    parser.add_argument("--stop-loss-pct", type=int, default=12,
+                        help="固定止损百分比；费用参数不受此参数影响（默认 12）")
+    parser.add_argument("--time-stop-days", type=int, default=0,
+                        help="时间止损交易日数；0 表示关闭（默认 0）")
     parser.add_argument("--force", action="store_true", help="忽略已有成功任务，全部重跑")
     parser.add_argument("--create-only", action="store_true", help="只创建策略")
+    parser.add_argument("--delete-losing", action="store_true",
+                        help="回测结束后删除本轮无盈利区间或任务未完成的策略；至少一段盈利则保留")
     parser.add_argument("--report", action="store_true", help="仅输出已有结果")
     args = parser.parse_args()
 
     args.only = [key.strip() for key in args.only.split(",") if key.strip()]
     args.windows = [key.strip().upper() for key in args.windows.split(",") if key.strip()]
     args.freqs = [key.strip().upper() for key in args.freqs.split(",") if key.strip()]
+    BACKTEST_PARAMS["stopLossPct"] = args.stop_loss_pct
+    BACKTEST_PARAMS["timeStopDays"] = args.time_stop_days
     for window in args.windows:
         if window not in WINDOWS:
             parser.error("未知区间：%s（可选 %s）" % (window, "/".join(WINDOWS)))
