@@ -66,6 +66,10 @@ finance:
       cron: "0 10 16 * * MON-FRI"
       zone: Asia/Shanghai
       catch-up: true
+      # macOS 睡眠会漏掉 cron，看门狗每 60s 用墙钟检查并在唤醒后补跑
+      watchdog-enabled: true
+      watchdog-ms: 60000
+      watchdog-retry-minutes: 15
 
   market:
     # 市场概览条的指数清单，由 --sync.indexes 入库
