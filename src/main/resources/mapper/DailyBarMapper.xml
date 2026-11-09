@@ -154,6 +154,18 @@
         GROUP BY instrument_id
     </select>
 
+    <select id="findInstrumentIdsBySource" resultType="java.lang.String">
+        SELECT DISTINCT instrument_id FROM daily_bar WHERE source = #{source}
+    </select>
+
+    <delete id="deleteBySource">
+        DELETE FROM daily_bar WHERE source = #{source}
+    </delete>
+
+    <select id="findMinTradeDateBySource" resultType="java.time.LocalDate">
+        SELECT MIN(trade_date) FROM daily_bar WHERE source = #{source}
+    </select>
+
     <select id="findFirstTradeDates" resultMap="InstrumentFirstBarMap">
         SELECT instrument_id, MIN(trade_date) AS first_date
         FROM daily_bar

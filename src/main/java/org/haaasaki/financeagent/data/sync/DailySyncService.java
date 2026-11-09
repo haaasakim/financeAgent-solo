@@ -1,9 +1,12 @@
 package org.haaasaki.financeagent.data.sync;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
@@ -69,9 +72,11 @@ public class DailySyncService {
                 return skipped();
             }
             if (lock == null) {
-                log.warn("另一个实例正在执行每日同步（{} 被占用），跳过本次执行", lockPath);
+                log.warn("另一个实例正在执行每日同步（{} 被占用，owner={}），跳过本次执行",
+                        lockPath, readLockOwner());
                 return skipped();
             }
+            writeLockOwner(channel);
             try (lock) {
                 return runLocked();
             }
@@ -83,6 +88,28 @@ public class DailySyncService {
 
     private SyncResult skipped() {
         return new SyncResult("DAILY_SYNC", "SKIPPED", 5, 0, 0, "已有一个每日同步在运行");
+    }
+
+    /** 把持有者 PID / 开始时间写入锁文件，便于排查“还有哪个实例”。 */
+    private void writeLockOwner(FileChannel channel) throws IOException {
+        String owner = "pid=" + ProcessHandle.current().pid()
+                + " started=" + LocalDateTime.now() + System.lineSeparator();
+        ByteBuffer buffer = ByteBuffer.wrap(owner.getBytes(StandardCharsets.UTF_8));
+        channel.truncate(0);
+        channel.position(0);
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
+        }
+        channel.force(true);
+    }
+
+    private String readLockOwner() {
+        try {
+            String owner = Files.readString(lockPath).trim();
+            return owner.isEmpty() ? "unknown" : owner.replace(System.lineSeparator(), "；");
+        } catch (IOException e) {
+            return "unknown";
+        }
     }
 
     private SyncResult runLocked() {

@@ -90,6 +90,17 @@ class SyncCommandLineRunnerTest {
     }
 
     @Test
+    @DisplayName("--sync.repair-source 触发指定来源的数据修复")
+    void repairSourceFlagTriggersRepair() {
+        given(syncService.repairSource("SINA_KLINE"))
+                .willReturn(new SyncResult("REPAIR_SINA_KLINE", "SUCCESS", 1, 1, 0, null));
+
+        runner.run(new DefaultApplicationArguments("--sync.repair-source=SINA_KLINE"));
+
+        verify(syncService).repairSource("SINA_KLINE");
+    }
+
+    @Test
     @DisplayName("无参数时不执行任何任务")
     void noFlagsDoesNothing() {
         runner.run(new DefaultApplicationArguments());

@@ -39,7 +39,7 @@ finance:
       circuit-breaker-threshold: 5
       cooldown-seconds: 60
     quote:
-      # 行情源顺序：primary 指定的源优先，另一个自动作为备源
+      # 行情源顺序：primary 指定的源优先，其余自动作为备源
       primary: eastmoney
       eastmoney-host: https://push2his.eastmoney.com
       # 日K域名按序回退。实测 ifzq.gtimg.cn 前置腾讯 WAF，

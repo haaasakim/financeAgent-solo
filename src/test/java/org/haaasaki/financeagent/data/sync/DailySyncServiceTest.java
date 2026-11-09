@@ -6,6 +6,13 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -108,6 +115,25 @@ class DailySyncServiceTest {
         assertThat(result.status()).isEqualTo("FAILED");
         assertThat(result.success()).isZero();
         assertThat(result.fail()).isEqualTo(3);
+    }
+
+    @Test
+    @DisplayName("锁被其他实例占用：返回 SKIPPED，不执行任何同步步骤")
+    void returnsSkippedWhenLockHeld() throws Exception {
+        Path lockPath = Path.of("target", "daily-sync-held-test.lock");
+        Files.deleteIfExists(lockPath);
+        DailySyncService blocked = new DailySyncService(
+                marketDataSyncService, factorComputeService, valuationSyncService, syncLogRecorder,
+                lockPath.toString());
+
+        try (FileChannel channel = FileChannel.open(lockPath,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+             FileLock ignored = channel.lock()) {
+            SyncResult result = blocked.run();
+
+            assertThat(result.status()).isEqualTo("SKIPPED");
+            verifyNoInteractions(marketDataSyncService, factorComputeService, valuationSyncService);
+        }
     }
 
     private SyncResult result(String taskName, String status) {

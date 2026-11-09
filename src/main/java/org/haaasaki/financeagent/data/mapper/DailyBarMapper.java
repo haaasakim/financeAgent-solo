@@ -66,6 +66,15 @@ public interface DailyBarMapper {
     /** 各标的的日K条数与日期范围；用于覆盖审计。 */
     List<InstrumentBarStats> findInstrumentBarStats();
 
+    /** 某个来源写入过的标的集合，供数据修复任务使用。 */
+    List<String> findInstrumentIdsBySource(@Param("source") String source);
+
+    /** 删除某个来源的全部日K；仅用于数据修复。 */
+    int deleteBySource(@Param("source") String source);
+
+    /** 某个来源写入过的最早交易日；修复时从该日期开始重拉即可。 */
+    Optional<LocalDate> findMinTradeDateBySource(@Param("source") String source);
+
     /** 全部标的的首根日K日期，供回测排除上市不足 5 个交易日的标的。 */
     List<InstrumentFirstBar> findFirstTradeDates();
 

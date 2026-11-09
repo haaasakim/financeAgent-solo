@@ -34,6 +34,7 @@ import org.springframework.stereotype.Component;
  * {@code --sync.audit} 只审计日K覆盖（不写库、不发外部请求）；
  * {@code --sync.backfill=N} 对审计出的历史缺口整段回填，N 为本轮上限（0 表示不限）；
  * {@code --sync.daily} 执行每日全流程（字典 → 日K → 因子 → 估值 → 快照），供定时任务与外部调度使用；
+ * {@code --sync.repair-source=SINA_KLINE} 用于错误数据源污染后的整段重拉与残留清理；
  * {@code --sync.snapshot} 同步全市场快照，{@code --sync.indexes} 同步配置中的指数。
  * {@code --factor.init} 全量回填因子，{@code --factor.update} 增量重算；
  * {@code --valuation.init} 全量回填历史估值，{@code --valuation.update} 增量更新；
@@ -103,6 +104,11 @@ public class SyncCommandLineRunner implements ApplicationRunner {
             log.info("命令行触发：回填历史日K缺口（单轮上限={}，0 表示不限）", limit);
             report(coverageService.backfill(limit));
         }
+        if (args.containsOption("sync.repair-source")) {
+            String source = option(args, "sync.repair-source", "");
+            log.info("命令行触发：修复数据来源 {}", source);
+            report(syncService.repairSource(source));
+        }
         if (args.containsOption("sync.snapshot")) {
             log.info("命令行触发：同步市场快照");
             report(syncService.syncMarketSnapshots());
@@ -140,6 +146,15 @@ public class SyncCommandLineRunner implements ApplicationRunner {
             log.warn("参数 {} 不是整数，按默认值 {} 处理", name, defaultValue);
             return defaultValue;
         }
+    }
+
+    private String option(ApplicationArguments args, String name, String defaultValue) {
+        List<String> values = args.getOptionValues(name);
+        if (values == null || values.isEmpty() || values.get(0) == null
+                || values.get(0).isBlank()) {
+            return defaultValue;
+        }
+        return values.get(0).trim();
     }
 
     private void report(SyncResult result) {

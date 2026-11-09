@@ -1,12 +1,15 @@
 package org.haaasaki.financeagent.data.provider.support;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.Charset;
 import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.haaasaki.financeagent.common.exception.DataSyncException;
 import org.slf4j.Logger;
@@ -92,23 +95,39 @@ public class ThrottledHttpClient {
                     builder.header("Referer", referer);
                 }
 
-                HttpResponse<byte[]> response =
-                        httpClient.send(builder.build(), HttpResponse.BodyHandlers.ofByteArray());
-                int status = response.statusCode();
-                if (status >= 200 && status < 300) {
-                    recordSuccess();
-                    return new String(response.body(), charset);
+                HttpResponse<byte[]> response = null;
+                CompletableFuture<HttpResponse<byte[]>> future = null;
+                try {
+                    future = httpClient.sendAsync(
+                            builder.build(), HttpResponse.BodyHandlers.ofByteArray());
+                    // send() 的请求超时在 macOS 休眠后可能不再触发；用 Future 再兜一层硬超时
+                    response = future.get(readTimeout.toMillis() + 1_000, TimeUnit.MILLISECONDS);
+                } catch (TimeoutException e) {
+                    if (future != null) {
+                        future.cancel(true);
+                    }
+                    recordFailure();
+                    lastError = new DataSyncException("请求超时 - " + url, e);
+                    log.warn("请求超时（{}ms），放弃本次请求：{}", readTimeout.toMillis(), url);
+                } catch (ExecutionException e) {
+                    recordFailure();
+                    lastError = new DataSyncException("请求失败 - " + url, e.getCause());
                 }
 
-                recordFailure();
-                lastError = new DataSyncException("HTTP " + status + " - " + url);
-                if (status >= 400 && status < 500 && status != 429 && status != 456) {
-                    log.warn("请求返回 {}，判定为不可重试：{}", status, url);
-                    break;
+                if (response != null) {
+                    int status = response.statusCode();
+                    if (status >= 200 && status < 300) {
+                        recordSuccess();
+                        return new String(response.body(), charset);
+                    }
+
+                    recordFailure();
+                    lastError = new DataSyncException("HTTP " + status + " - " + url);
+                    if (status >= 400 && status < 500 && status != 429 && status != 456) {
+                        log.warn("请求返回 {}，判定为不可重试：{}", status, url);
+                        break;
+                    }
                 }
-            } catch (IOException e) {
-                recordFailure();
-                lastError = new DataSyncException("请求失败 - " + url, e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new DataSyncException("请求被中断 - " + url, e);

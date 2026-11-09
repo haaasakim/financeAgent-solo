@@ -34,7 +34,8 @@ public class QuoteProviderConfig {
                 httpClient, objectMapper, segmentYears, quoteProperties);
         QuoteProvider eastmoney = new EastmoneyQuoteProvider(
                 httpClient, objectMapper, eastmoneyHost);
-        List<QuoteProvider> order = "tencent".equalsIgnoreCase(primary.trim())
+        String preferred = primary == null ? "eastmoney" : primary.trim().toLowerCase();
+        List<QuoteProvider> order = "tencent".equals(preferred)
                 ? List.of(tencent, eastmoney)
                 : List.of(eastmoney, tencent);
         return new FallbackQuoteProvider(order);

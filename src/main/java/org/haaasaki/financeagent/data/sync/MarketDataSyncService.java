@@ -46,8 +46,11 @@ public class MarketDataSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataSyncService.class);
 
-    /** 除权检测容差：价格精确到分，差异超过 1 厘即视为复权基准已变化。 */
-    private static final double CLOSE_EPSILON = 0.001;
+    /**
+     * 除权检测容差：不同数据源前复权小数位不同（东财 2 位、腾讯 3 位、新浪 3 位），
+     * 取 0.006 避免把舍入差误判为除权；真实除权/拆股通常远大于 1 分。
+     */
+    private static final double CLOSE_EPSILON = 0.006;
 
     /** 增量回看窗口（自然日）。upsert 幂等，多拉无害。 */
     private static final int INCREMENTAL_LOOKBACK_DAYS = 30;
@@ -166,10 +169,49 @@ public class MarketDataSyncService {
         return syncDailyBars(targets, "BACKFILL_DAILY_BARS");
     }
 
+    /**
+     * 数据修复：把某个来源写入过的标的整段重拉一遍，然后清理该来源的残留行。
+     *
+     * <p>用于错误数据源（如口径不一致的备源）污染后的恢复。重拉走正常 Provider 链路，
+     * 写入仍是 upsert；清理只删除指定 source，不碰其他来源的数据。
+     *
+     * @param source 需要修复的 {@code daily_bar.source}，如 {@code SINA_KLINE}
+     */
+    public SyncResult repairSource(String source) {
+        if (source == null || source.isBlank()) {
+            throw new DataIntegrityException("修复来源不能为空");
+        }
+        List<String> ids = dailyBarMapper.findInstrumentIdsBySource(source);
+        List<Instrument> targets = ids.stream()
+                .map(instrumentMapper::findById)
+                .flatMap(java.util.Optional::stream)
+                .toList();
+        if (targets.isEmpty()) {
+            log.info("数据修复[{}]：没有需要修复的标的", source);
+            return new SyncResult("REPAIR_" + source, "SUCCESS", 0, 0, 0, "无待修复标的");
+        }
+        log.info("数据修复[{}]：重拉 {} 只标的，随后清理该来源残留", source, targets.size());
+        LocalDate start = dailyBarMapper.findMinTradeDateBySource(source)
+                .orElse(LocalDate.now().minusYears(historyYears));
+        SyncResult result = syncDailyBars(targets, "REPAIR_" + source, start);
+        int deleted = dailyBarMapper.deleteBySource(source);
+        String cleanup = "；清理残留 " + deleted + " 行";
+        log.info("数据修复[{}]：{}{}", source, result.success() + "/" + result.total(), cleanup);
+        return new SyncResult(result.taskName(), result.status(), result.total(),
+                result.success(), result.fail(),
+                (result.message() == null ? "" : result.message()) + cleanup);
+    }
+
     private SyncResult syncDailyBars(List<Instrument> targets, String taskName) {
+        return syncDailyBars(targets, taskName, LocalDate.now().minusYears(historyYears));
+    }
+
+    private SyncResult syncDailyBars(List<Instrument> targets, String taskName, LocalDate start) {
         LocalDateTime startedAt = LocalDateTime.now();
         LocalDate end = LocalDate.now();
-        LocalDate start = end.minusYears(historyYears);
+        if (start.isAfter(end)) {
+            start = end;
+        }
 
         int success = 0;
         int fail = 0;
